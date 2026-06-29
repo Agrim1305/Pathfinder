@@ -2,6 +2,8 @@
 
 A clean, well-documented implementation of three classic pathfinding algorithms for finding optimal routes through weighted 2D grids.
 
+**Source code:** [github.com/Agrim1305/Pathfinder](https://github.com/Agrim1305/Pathfinder)
+
 ## Algorithms Implemented
 
 ### **BFS (Breadth-First Search)**
@@ -62,16 +64,19 @@ python example.py
 ```
 
 ## Map File Format
-rows col
+
+```
+rows cols
 start_row start_col    (1-indexed)
 end_row end_col        (1-indexed)
 elevation grid (space-separated, 'X' for obstacle)
-
+```
 
 Lines starting with `#` are treated as comments and ignored.
 
 ### Example
-elevation grid example
+```
+# elevation grid example
 4 5
 1 1
 4 5
@@ -79,6 +84,7 @@ elevation grid example
 0 0 0 X 0
 0 0 0 X 0
 0 0 0 0 0
+```
 
 ## Generating Maps
 
@@ -113,11 +119,15 @@ else:
 For A*, two heuristics are provided:
 
 ### Manhattan Distance
+```
 h = |x1 - x2| + |y1 - y2|
+```
 Good for grid-based movement. Admissible (never overestimates).
 
 ### Euclidean Distance
-h = sqrt((x1 - x2)² + (y1 - y2)²)
+```
+h = sqrt((x1 - x2)^2 + (y1 - y2)^2)
+```
 Good when diagonal movement is theoretically possible. Also admissible.
 
 ## Test Maps
@@ -130,15 +140,21 @@ Included maps in the `maps/` directory:
 - `large.txt` — 20×20 random elevation and obstacles (shows A* exploring far fewer nodes than UCS)
 
 ### Example: comparing algorithms on `choice.txt`
+
 All three find the same optimal path, but explore very different numbers of nodes:
-- BFS: 112 nodes explored
-- UCS: 75 nodes explored
-- A*: 41 nodes explored
+
+| Algorithm | Path length | Nodes explored |
+|-----------|-------------|----------------|
+| BFS       | 15          | 112            |
+| UCS       | 15          | 75             |
+| A*        | 15          | 41             |
 
 This illustrates how A*'s heuristic guides the search toward the goal, while BFS and UCS expand outward more broadly.
 
 ## Author
+
 Agrim Sharma
 
 ## License
+
 Educational use. Part of a university AI assignment, with the pathfinding algorithms implemented from scratch.
