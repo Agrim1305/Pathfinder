@@ -1,6 +1,14 @@
-# Text map rows are written top-to-bottom.
-# Markers: S=start/empty, .=empty, W=Wumpus, P=pit, G=gold.
-...G
-W...
-..P.
-S.P.
+# Elevation choice: cheap flat detour vs costly climb (BFS vs UCS/A*)
+# Line 1: rows cols | Line 2: start | Line 3: end
+# Cells: integers = elevation, X = obstacle
+8 8
+1 1
+8 8
+0 0 0 0 0 0 0 0
+0 5 5 5 5 5 5 0
+0 5 9 9 9 9 5 0
+0 5 9 9 9 9 5 0
+0 5 9 9 9 9 5 0
+0 5 5 5 5 5 5 0
+0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0

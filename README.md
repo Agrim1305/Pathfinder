@@ -1,79 +1,144 @@
-# Assignment 3: Navigating Wumpus World: Task 2
+# Pathfinder: Graph Search Algorithms
 
-## Foreword
+A clean, well-documented implementation of three classic pathfinding algorithms for finding optimal routes through weighted 2D grids.
 
-The game emulator was created through vibe coding with OpenAI Codex. It is amazing to see what GenAI models are capable of these days.
-However, I noticed that once the game logic becomes complex, manually modifying the code becomes much harder without introducing compilation errors here and there. Even small changes can lead to a lot of debugging. In the end, continuing to vibe code felt like the only practical option.
+## Algorithms Implemented
 
-I have coded my own solution and also vibe-coded one.
-My overall feeling is that vibe coding is both an elixir and a poison: your solution may achieve a good score,
-but you will learn very little if you do not spend time understanding it.
-It is good at producing quick-and-dirty solutions for low-risk problems, but if you are responsible for what your code does, you may eventually prefer to write it yourself.
+### **BFS (Breadth-First Search)**
+- Finds the **shortest path** (minimum number of steps)
+- Best for: Unweighted graphs
+- Guarantees: Optimal solution
+- Efficiency: O(V + E) time
 
-Please try to work out a solution yourself. It is not an easy assignment, and you will generally feel more accomplished
-after solving it on your own.
-If you would like some help, see the [Tips](documentation/tips.md).
+### **UCS (Uniform Cost Search)**
+- Finds the **lowest-cost path** when edges have varying weights
+- Based on Dijkstra's algorithm
+- Best for: Weighted graphs without a good heuristic
+- Guarantees: Optimal solution for non-negative weights
+- Efficiency: Better than BFS for weighted graphs, but explores more nodes than A*
 
+### **A* (A-star)**
+- **Heuristic-guided search** combining actual cost and estimated distance
+- Balances optimality and efficiency
+- Best for: When a good admissible heuristic exists
+- Supports: Euclidean and Manhattan distance heuristics
+- Guarantees: Optimal solution (with admissible heuristic)
+- Efficiency: Typically explores fewer nodes than UCS
 
-## Assignment Objective
+## Problem Domain
 
-In this assignment, you will program a Wumpus Agent capable of intelligently navigating several different caves.
-You may use whatever logic or algorithmic approaches you would like.
-The goal of your agent is to exit the game with a positive score.
-
-## Setup
-
-The main dependency for the game is [Pygame](https://www.pygame.org/news). Use the following command to install the dependencies:
-
-```bash
-python -m pip install -r requirements.txt
-```
+The algorithms solve pathfinding on **elevation-aware grids**:
+- **Cells** have integer elevation values
+- **Movement cost** = 1 + max(0, elevation_difference) — moving uphill is expensive
+- **Obstacles** block movement (marked as 'X')
+- **Movement**: 4-directional (no diagonals)
 
 ## Quick Start
 
-The game is playable by a human, and playing it yourself is probably the best way to understand how it works.
-To run the human-controlled agent:
-
+### Installation
 ```bash
-python human_agent.py --cave default
+# No external dependencies required (uses only Python stdlib)
+python pathfinder.py
 ```
 
-<img src="documentation/game_interface.png" alt="description" width="800">
+### Basic Usage
+```bash
+# Find shortest path (BFS)
+python pathfinder.py release maps/choice.txt bfs
 
-### Key Mapping
+# Find lowest-cost path (UCS)
+python pathfinder.py release maps/choice.txt ucs
 
-- `Space`: move forward
-- `Left`: turn left
-- `Right`: turn right
-- `Z`: shoot arrow
-- `X`: grab gold
-- `Q`: exit at the starting square
-- `N`: spawn a new cave
-- `R`: reveal or hide the full cave
+# Find path with heuristic guidance (A*)
+python pathfinder.py release maps/choice.txt astar manhattan
 
-### Input Arguments
+# Debug mode: see path + visit statistics
+python pathfinder.py debug maps/large.txt astar manhattan
+```
 
-All launchers (`human_agent.py`, `my_agent.py`, `random_agent.py`) accept:
+### Run the Example
+```bash
+python example.py
+```
 
-- `--config`: path to the main game config file. You do not need to change this.
-- `--cave`: cave profile name, e.g. `gold` or `default`.
-- `--show-window`: override `emulator.show_window` with `true` or `false`, which lets the game run in visual or silent mode.
-- `--seed`: override `cave.seed` with an integer if you want to make sure the same map is loaded. Note that new games created after the first game will be randomised.
-
-The human agent requires a visible Pygame window for keyboard input, so `human_agent.py` opens the window by default even if `game_config.yaml` has `show_window: false`.
-
-### Bug reports
-
-If you find any bugs in the game, please feel free to submit an issue on GitHub.
-
-## Portals
-
-Here are the portals to help you navigate the assignment:
-
-* Main Page <--- you are here
-* [Task Description](documentation/task_description.md)
-* [Evaluation](documentation/evaluation.md)
-* [Support Functions](documentation/support_functions.md)
-* [Tips](documentation/tips.md)
+## Map File Format
+rows col
+start_row start_col    (1-indexed)
+end_row end_col        (1-indexed)
+elevation grid (space-separated, 'X' for obstacle)
 
 
+Lines starting with `#` are treated as comments and ignored.
+
+### Example
+elevation grid example
+4 5
+1 1
+4 5
+0 0 0 X 0
+0 0 0 X 0
+0 0 0 X 0
+0 0 0 0 0
+
+## Generating Maps
+
+Regenerate or customize the bundled maps with the included generator:
+
+```bash
+python generate_maps.py
+```
+
+Edit the parameters in `generate_maps.py` to create your own grids.
+
+## API Overview
+
+```python
+from pathfinder import parse_map, bfs, ucs, astar
+
+# Load map
+rows, cols, start, end, grid = parse_map("maps/choice.txt")
+
+# Run algorithm
+path, num_visits, first_visit, last_visit = bfs(rows, cols, start, end, grid)
+
+# Check result
+if path:
+    print(f"Found path of length {len(path)}")
+else:
+    print("No path exists")
+```
+
+## Heuristics
+
+For A*, two heuristics are provided:
+
+### Manhattan Distance
+h = |x1 - x2| + |y1 - y2|
+Good for grid-based movement. Admissible (never overestimates).
+
+### Euclidean Distance
+h = sqrt((x1 - x2)² + (y1 - y2)²)
+Good when diagonal movement is theoretically possible. Also admissible.
+
+## Test Maps
+
+Included maps in the `maps/` directory:
+- `small.txt` — 5×5 grid with a wall and gentle elevation (quick demo)
+- `choice.txt` — 8×8 grid where a cheap flat detour beats a costly climb (best for comparing algorithms)
+- `maze.txt` — 11×11 maze; tests obstacle navigation
+- `open.txt` — 10×10 flat grid, no obstacles (baseline comparison)
+- `large.txt` — 20×20 random elevation and obstacles (shows A* exploring far fewer nodes than UCS)
+
+### Example: comparing algorithms on `choice.txt`
+All three find the same optimal path, but explore very different numbers of nodes:
+- BFS: 112 nodes explored
+- UCS: 75 nodes explored
+- A*: 41 nodes explored
+
+This illustrates how A*'s heuristic guides the search toward the goal, while BFS and UCS expand outward more broadly.
+
+## Author
+Agrim Sharma
+
+## License
+Educational use. Part of a university AI assignment, with the pathfinding algorithms implemented from scratch.

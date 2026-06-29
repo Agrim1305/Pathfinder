@@ -1,0 +1,17 @@
+# Maze: 11x11 with walls; tests obstacle navigation
+# Line 1: rows cols | Line 2: start | Line 3: end
+# Cells: integers = elevation, X = obstacle
+11 11
+1 1
+11 11
+0 0 0 0 0 0 0 0 0 0 0
+0 X X X 0 X 0 X X X 0
+0 0 0 0 0 X 0 0 0 0 0
+0 X 0 X X X X X 0 X 0
+0 0 0 0 0 0 0 0 0 X 0
+0 X X X 0 X 0 X 0 X 0
+0 0 0 0 0 X 0 0 0 0 0
+0 X 0 X X X X X 0 X 0
+0 0 0 X 0 0 0 0 0 0 0
+0 X 0 X 0 X X X 0 X 0
+0 0 0 0 0 0 0 0 0 0 0

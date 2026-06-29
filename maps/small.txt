@@ -1,0 +1,11 @@
+# Small demo: 5x5 with a wall and gentle elevation
+# Line 1: rows cols | Line 2: start | Line 3: end
+# Cells: integers = elevation, X = obstacle
+5 5
+1 1
+5 5
+0 0 0 1 1
+0 X 0 1 2
+0 X 0 0 2
+0 X X 0 1
+0 0 0 0 0

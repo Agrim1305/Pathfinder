@@ -1,3 +1,3 @@
-pygame>=2.5
-PyYAML>=6.0
-numpy>=1.26
+# No external dependencies required.
+# Pathfinder uses only Python standard library (heapq, collections, typing, math, sys).
+# Runs on Python 3.6+

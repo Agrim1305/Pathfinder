@@ -1,0 +1,16 @@
+# Open field: 10x10 flat, no obstacles (baseline)
+# Line 1: rows cols | Line 2: start | Line 3: end
+# Cells: integers = elevation, X = obstacle
+10 10
+1 1
+10 10
+0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0
+0 0 0 0 0 0 0 0 0 0
