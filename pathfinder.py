@@ -111,6 +111,22 @@ def step_cost(grid: Grid, r1: int, c1: int, r2: int, c2: int) -> int:
     return 1 + max(0, elev_to - elev_from)
 
 
+def path_cost(grid: Grid, path: Optional[Path]) -> Optional[int]:
+    """
+    Total movement cost of a path, using the same rule as step_cost.
+
+    Args:
+        grid: The elevation grid.
+        path: List of positions from start to goal, or None.
+
+    Returns:
+        The summed cost, or None if there is no path.
+    """
+    if path is None:
+        return None
+    return sum(step_cost(grid, *path[i], *path[i + 1]) for i in range(len(path) - 1))
+
+
 def heuristic(r: int, c: int, end_r: int, end_c: int, h_type: str) -> float:
     """
     Compute heuristic distance estimate from (r,c) to goal.
@@ -128,6 +144,20 @@ def heuristic(r: int, c: int, end_r: int, end_c: int, h_type: str) -> float:
     elif h_type == 'manhattan':
         return abs(r - end_r) + abs(c - end_c)
     return 0
+
+
+def reconstruct_path(came_from: dict, end: Position) -> Path:
+    """
+    Rebuild the path by walking back from the goal to the start.
+
+    Each node only stores the node it came from, so we don't have to copy
+    the whole path into every queue entry (much less memory on big maps).
+    """
+    path = [end]
+    while came_from[path[-1]] is not None:
+        path.append(came_from[path[-1]])
+    path.reverse()
+    return path
 
 
 def bfs(rows: int, cols: int, start: Position, end: Position, grid: Grid) -> Tuple[Optional[Path], List[List[int]], List[List[int]], List[List[int]]]:
@@ -155,11 +185,12 @@ def bfs(rows: int, cols: int, start: Position, end: Position, grid: Grid) -> Tup
     last_visit = [[0] * cols for _ in range(rows)]
 
     closed = set()
+    came_from = {}  # each node -> the node we reached it from, used to rebuild the path
     fringe = deque()
-    fringe.append((start, [start]))
+    fringe.append((start, None))
 
     while fringe:
-        node, path = fringe.popleft()
+        node, parent = fringe.popleft()
         r, c = node
 
         visit_counter += 1
@@ -169,16 +200,18 @@ def bfs(rows: int, cols: int, start: Position, end: Position, grid: Grid) -> Tup
         last_visit[r][c] = visit_counter
 
         if node == end:
-            return path, num_visits, first_visit, last_visit
+            came_from[node] = parent
+            return reconstruct_path(came_from, end), num_visits, first_visit, last_visit
 
         if node in closed:
             continue
 
         closed.add(node)
+        came_from[node] = parent
 
         for nr, nc in get_neighbours(r, c, rows, cols, grid):
             if (nr, nc) not in closed:
-                fringe.append(((nr, nc), path + [(nr, nc)]))
+                fringe.append(((nr, nc), node))
 
     return None, num_visits, first_visit, last_visit
 
@@ -206,10 +239,11 @@ def ucs(rows: int, cols: int, start: Position, end: Position, grid: Grid) -> Tup
     closed = set()
     counter = 0
     fringe = []
-    heapq.heappush(fringe, (0, counter, start, [start]))
+    came_from = {}  # each node -> the node we reached it from, used to rebuild the path
+    heapq.heappush(fringe, (0, counter, start, None))
 
     while fringe:
-        cost, _, node, path = heapq.heappop(fringe)
+        cost, _, node, parent = heapq.heappop(fringe)
         r, c = node
 
         visit_counter += 1
@@ -219,18 +253,20 @@ def ucs(rows: int, cols: int, start: Position, end: Position, grid: Grid) -> Tup
         last_visit[r][c] = visit_counter
 
         if node == end:
-            return path, num_visits, first_visit, last_visit
+            came_from[node] = parent
+            return reconstruct_path(came_from, end), num_visits, first_visit, last_visit
 
         if node in closed:
             continue
 
         closed.add(node)
+        came_from[node] = parent
 
         for nr, nc in get_neighbours(r, c, rows, cols, grid):
             if (nr, nc) not in closed:
                 new_cost = cost + step_cost(grid, r, c, nr, nc)
                 counter += 1
-                heapq.heappush(fringe, (new_cost, counter, (nr, nc), path + [(nr, nc)]))
+                heapq.heappush(fringe, (new_cost, counter, (nr, nc), node))
 
     return None, num_visits, first_visit, last_visit
 
@@ -261,10 +297,11 @@ def astar(rows: int, cols: int, start: Position, end: Position, grid: Grid, h_ty
     h = heuristic(start[0], start[1], end_r, end_c, h_type)
     counter = 0
     fringe = []
-    heapq.heappush(fringe, (h, counter, 0, start, [start]))
+    came_from = {}  # each node -> the node we reached it from, used to rebuild the path
+    heapq.heappush(fringe, (h, counter, 0, start, None))
 
     while fringe:
-        f, _, g, node, path = heapq.heappop(fringe)
+        f, _, g, node, parent = heapq.heappop(fringe)
         r, c = node
 
         visit_counter += 1
@@ -274,12 +311,14 @@ def astar(rows: int, cols: int, start: Position, end: Position, grid: Grid, h_ty
         last_visit[r][c] = visit_counter
 
         if node == end:
-            return path, num_visits, first_visit, last_visit
+            came_from[node] = parent
+            return reconstruct_path(came_from, end), num_visits, first_visit, last_visit
 
         if node in closed:
             continue
 
         closed.add(node)
+        came_from[node] = parent
 
         for nr, nc in get_neighbours(r, c, rows, cols, grid):
             if (nr, nc) not in closed:
@@ -287,7 +326,7 @@ def astar(rows: int, cols: int, start: Position, end: Position, grid: Grid, h_ty
                 new_h = heuristic(nr, nc, end_r, end_c, h_type)
                 new_f = new_g + new_h
                 counter += 1
-                heapq.heappush(fringe, (new_f, counter, new_g, (nr, nc), path + [(nr, nc)]))
+                heapq.heappush(fringe, (new_f, counter, new_g, (nr, nc), node))
 
     return None, num_visits, first_visit, last_visit
 

@@ -1,160 +1,135 @@
-# Pathfinder: Graph Search Algorithms
+# Pathfinder: Terrain Route Planner
 
-A clean, well-documented implementation of three classic pathfinding algorithms for finding optimal routes through weighted 2D grids.
+![tests](https://github.com/Agrim1305/Pathfinder/actions/workflows/tests.yml/badge.svg)
 
-**Source code:** [github.com/Agrim1305/Pathfinder](https://github.com/Agrim1305/Pathfinder)
+Finds the lowest-effort route across terrain with hills and obstacles, and shows why the
+choice of search algorithm matters. BFS, Dijkstra (Uniform Cost Search) and A\* are
+implemented from scratch in Python with no external dependencies.
 
-## Algorithms Implemented
+**[Try it in your browser](https://agrim1305.github.io/Pathfinder/)**: pick an algorithm, or race all three, and watch each one search the demo map. Once a route is found, a hiker walks it at a pace set by the real step cost, so climbs visibly slow it down. Every visit, and every press of "New walls", gives a fresh random wall layout on the same hilly terrain. The figures below use the fixed walls in `maps/detour.txt`, and `python benchmark.py` reproduces them. The browser version is a JavaScript copy of the same algorithms, and CI checks it gives identical results to the Python code on every map.
 
-### **BFS (Breadth-First Search)**
-- Finds the **shortest path** (minimum number of steps)
-- Best for: Unweighted graphs
-- Guarantees: Optimal solution
-- Efficiency: O(V + E) time
+**The short version:** counting steps is not enough. On the demo map, BFS (which only
+counts steps) walks straight over a hill and pays **35% more effort** than the best route of
+the same length, and A\* finds that best route while expanding **59% fewer nodes** than Dijkstra.
 
-### **UCS (Uniform Cost Search)**
-- Finds the **lowest-cost path** when edges have varying weights
-- Based on Dijkstra's algorithm
-- Best for: Weighted graphs without a good heuristic
-- Guarantees: Optimal solution for non-negative weights
-- Efficiency: Better than BFS for weighted graphs, but explores more nodes than A*
+![Both routes take 26 steps; the BFS route (orange) goes over the hill, the lowest-effort route (blue) goes around it](docs/routes.png)
 
-### **A* (A-star)**
-- **Heuristic-guided search** combining actual cost and estimated distance
-- Balances optimality and efficiency
-- Best for: When a good admissible heuristic exists
-- Supports: Euclidean and Manhattan distance heuristics
-- Guarantees: Optimal solution (with admissible heuristic)
-- Efficiency: Typically explores fewer nodes than UCS
+## The problem
 
-## Problem Domain
+Each cell of the grid has an elevation, and some cells are blocked. Moving to a
+neighbouring cell (up, down, left or right) costs:
 
-The algorithms solve pathfinding on **elevation-aware grids**:
-- **Cells** have integer elevation values
-- **Movement cost** = 1 + max(0, elevation_difference) — moving uphill is expensive
-- **Obstacles** block movement (marked as 'X')
-- **Movement**: 4-directional (no diagonals)
-
-## Quick Start
-
-### Installation
-```bash
-# No external dependencies required (uses only Python stdlib)
-python pathfinder.py
+```
+cost = 1 + max(0, elevation_to - elevation_from)
 ```
 
-### Basic Usage
+So walking downhill or on the flat costs 1, and climbing costs extra. The goal is the
+route from start to finish with the lowest total cost.
+
+## Results
+
+![Dijkstra examines cells on the hill; A* skips it and examines 45% fewer](docs/explored.png)
+
+Reproduce these with `python benchmark.py`. "Nodes" counts every node taken off the
+search queue. A\* uses the Manhattan heuristic.
+
+| Map                      | BFS cost | Best cost (UCS and A\*) | BFS nodes | UCS nodes | A\* nodes | A\* saving vs UCS |
+| ------------------------ | -------- | ----------------------- | --------- | --------- | --------- | ----------------- |
+| small (5×5)              | 8        | 8                       | 27        | 26        | 16        | 38%               |
+| choice (8×8)             | 14       | 14                      | 112       | 75        | 41        | 45%               |
+| maze (11×11)             | 20       | 20                      | 96        | 96        | 90        | 6%                |
+| open (10×10)             | 18       | 18                      | 180       | 180       | 180       | 0%                |
+| large (20×20)            | 67       | 54                      | 618       | 618       | 553       | 11%               |
+| detour (14×14), demo map | 35       | 26                      | 331       | 331       | 137       | 59%               |
+
+What the numbers show:
+
+- **BFS ignores cost.** It only counts steps, so on the large map it picks a 38-step route
+  that costs 67, when another 38-step route costs 54.
+- **A\* only helps when the heuristic has something to say.** It saves 45% on `choice`,
+  where the goal direction is clear, and nothing on a flat open grid, where every route
+  of the same length ties.
+- **UCS and A\* always agree on the best cost**, which the tests check on every map.
+
+## Quick start
+
+Requires Python 3.9 or newer. No packages to install.
+
 ```bash
-# Find shortest path (BFS)
-python pathfinder.py release maps/choice.txt bfs
-
-# Find lowest-cost path (UCS)
-python pathfinder.py release maps/choice.txt ucs
-
-# Find path with heuristic guidance (A*)
+# Lowest-cost route with A*
 python pathfinder.py release maps/choice.txt astar manhattan
 
-# Debug mode: see path + visit statistics
+# Same map with Dijkstra (UCS), and with BFS for comparison
+python pathfinder.py release maps/choice.txt ucs
+python pathfinder.py release maps/choice.txt bfs
+
+# Debug mode: the route plus how often, and in what order, each cell was visited
 python pathfinder.py debug maps/large.txt astar manhattan
+
+# Compare all algorithms on all maps
+python benchmark.py
+
+# Redraw the README images (optional, needs matplotlib)
+pip install matplotlib
+python visualize.py
 ```
 
-### Run the Example
+## Tests
+
 ```bash
-python example.py
+python -m unittest discover -s tests -v
 ```
 
-## Map File Format
+13 Python tests, plus a check (`node tests/compare_js.js`) that the browser demo matches the Python code, all run automatically on every push by GitHub Actions. The Python tests check that:
+
+- every algorithm returns a legal path (adjacent steps, no obstacles, no repeated cells)
+  on every map, with both A\* heuristics
+- UCS and A\* find the same optimal cost, and BFS never takes more steps than either
+- A\* never expands more nodes than UCS
+- the figures in the results table stay correct
+- edge cases behave: unreachable goal, start equal to goal, a single-cell grid, and
+  uphill versus downhill costs
+
+## Design decisions
+
+- **Binary heap priority queue.** UCS and A\* use `heapq`, so each push and pop is
+  O(log n). An insertion counter breaks ties, which keeps the order stable and avoids
+  comparing positions.
+- **Hash-set closed list.** Checking whether a node was already expanded is O(1).
+- **Parent pointers, not path copies.** Each node stores the single node it came from,
+  and the route is rebuilt once at the goal. An earlier version copied the whole partial
+  path into every queue entry, which costs O(path length) memory per entry. Parent
+  pointers keep it at O(V) overall, with identical output.
+- **Admissible heuristics.** Every step costs at least 1, so Manhattan distance never
+  overestimates the remaining cost, and A\* stays optimal. Euclidean is also provided.
+
+## Map format
 
 ```
+# lines starting with # are comments
 rows cols
 start_row start_col    (1-indexed)
 end_row end_col        (1-indexed)
-elevation grid (space-separated, 'X' for obstacle)
+elevation grid, space-separated, X for an obstacle
 ```
 
-Lines starting with `#` are treated as comments and ignored.
+`generate_maps.py` rebuilds the bundled maps, and its parameters can be changed to make
+new ones.
 
-### Example
+## Project structure
+
 ```
-# elevation grid example
-4 5
-1 1
-4 5
-0 0 0 X 0
-0 0 0 X 0
-0 0 0 X 0
-0 0 0 0 0
+pathfinder.py        search algorithms, cost model and command-line interface
+benchmark.py         compares every algorithm on every map
+visualize.py         draws the README images (needs matplotlib)
+docs/                browser demo (index.html, pathfinder.js) and README images
+example.py           using the module from Python
+generate_maps.py     builds the test maps
+maps/                six maps, from a 5×5 demo to a 20×20 random terrain, plus the browser demo map
+tests/               unit tests
 ```
-
-## Generating Maps
-
-Regenerate or customize the bundled maps with the included generator:
-
-```bash
-python generate_maps.py
-```
-
-Edit the parameters in `generate_maps.py` to create your own grids.
-
-## API Overview
-
-```python
-from pathfinder import parse_map, bfs, ucs, astar
-
-# Load map
-rows, cols, start, end, grid = parse_map("maps/choice.txt")
-
-# Run algorithm
-path, num_visits, first_visit, last_visit = bfs(rows, cols, start, end, grid)
-
-# Check result
-if path:
-    print(f"Found path of length {len(path)}")
-else:
-    print("No path exists")
-```
-
-## Heuristics
-
-For A*, two heuristics are provided:
-
-### Manhattan Distance
-```
-h = |x1 - x2| + |y1 - y2|
-```
-Good for grid-based movement. Admissible (never overestimates).
-
-### Euclidean Distance
-```
-h = sqrt((x1 - x2)^2 + (y1 - y2)^2)
-```
-Good when diagonal movement is theoretically possible. Also admissible.
-
-## Test Maps
-
-Included maps in the `maps/` directory:
-- `small.txt` — 5×5 grid with a wall and gentle elevation (quick demo)
-- `choice.txt` — 8×8 grid where a cheap flat detour beats a costly climb (best for comparing algorithms)
-- `maze.txt` — 11×11 maze; tests obstacle navigation
-- `open.txt` — 10×10 flat grid, no obstacles (baseline comparison)
-- `large.txt` — 20×20 random elevation and obstacles (shows A* exploring far fewer nodes than UCS)
-
-### Example: comparing algorithms on `choice.txt`
-
-All three find the same optimal path, but explore very different numbers of nodes:
-
-| Algorithm | Path length | Nodes explored |
-|-----------|-------------|----------------|
-| BFS       | 15          | 112            |
-| UCS       | 15          | 75             |
-| A*        | 15          | 41             |
-
-This illustrates how A*'s heuristic guides the search toward the goal, while BFS and UCS expand outward more broadly.
 
 ## Author
 
-Agrim Sharma
-
-## License
-
-Educational use. Part of a university AI assignment, with the pathfinding algorithms implemented from scratch.
+Agrim Sharma. Started as a university AI assignment, then extended with benchmarking,
+tests and a more memory-efficient path reconstruction.

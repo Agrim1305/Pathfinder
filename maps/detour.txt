@@ -1,0 +1,20 @@
+# Detour: one big hill on the way. BFS climbs it; UCS and A* walk around it.
+# Used by the browser demo. Line 1: rows cols | Line 2: start | Line 3: end
+# Cells: integers = elevation, X = obstacle
+14 14
+1 1
+14 14
+0 0 0 0 0 0 0 0 X 0 0 0 0 0
+0 0 0 0 0 0 0 0 X 0 0 0 0 0
+0 0 0 0 0 0 0 0 X 0 0 0 0 0
+0 0 0 0 0 0 0 0 X 0 0 0 0 0
+0 1 1 1 0 0 0 0 X 0 0 0 0 0
+1 1 1 1 1 1 0 0 X X X X 0 0
+2 3 3 3 2 1 1 0 0 0 0 0 0 0
+3 4 5 4 3 2 1 1 0 0 0 0 0 0
+5 6 7 6 5 3 2 1 0 0 0 0 0 0
+6 8 8 8 6 4 3 1 1 0 0 0 0 0
+7 8 9 8 7 5 3 1 1 0 0 0 0 0
+6 8 8 8 6 4 3 1 1 0 0 0 0 0
+5 6 7 6 5 3 2 1 0 0 0 0 0 0
+3 4 5 4 3 2 1 1 0 0 0 0 0 0

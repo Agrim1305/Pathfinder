@@ -1,0 +1,1368 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Pathfinder Terrain Lab</title>
+    <meta name="claude:viewport-fit-sides" content="cover" />
+    <meta
+      name="description"
+      content="Watch BFS, Dijkstra and A* search a hilly terrain for the lowest-effort route."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500&display=swap"
+    />
+    <style>
+      /* Layout: a survey-sheet workbench. Controls across the top, the terrain board as the hero,
+   readouts in a side column that drops below the board on phones. */
+      :root {
+        --paper: #f6f7f2;
+        --panel: #ffffff;
+        --ink: #1d231b;
+        --muted: #5d6657;
+        --line: #d7dccf;
+        --low: #f1f4e8;
+        --high: #8fa36f;
+        --wall: #262a24;
+        --bfs: #d1581f;
+        --dijkstra: #8a5bb5;
+        --astar: #1f5fa8;
+        --seen: #e0882f;
+        --focus: #1f5fa8;
+        --flag: #c8372d;
+        --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+        --font-body: "Archivo", "Helvetica Neue", Arial, sans-serif;
+        --font-data:
+          "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+        --radius: 6px;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --paper: #141712;
+          --panel: #1c2019;
+          --ink: #e8ecdf;
+          --muted: #9aa392;
+          --line: #313828;
+          --low: #262c21;
+          --high: #56663f;
+          --wall: #a3aa98;
+          --bfs: #f07a3e;
+          --dijkstra: #b48ce0;
+          --astar: #5c9ce6;
+          --seen: #f0a24a;
+          --focus: #7fb2f0;
+          --flag: #f0675b;
+          color-scheme: dark;
+        }
+      }
+      :root[data-theme="dark"] {
+        --paper: #141712;
+        --panel: #1c2019;
+        --ink: #e8ecdf;
+        --muted: #9aa392;
+        --line: #313828;
+        --low: #262c21;
+        --high: #56663f;
+        --wall: #a3aa98;
+        --bfs: #f07a3e;
+        --dijkstra: #b48ce0;
+        --astar: #5c9ce6;
+        --seen: #f0a24a;
+        --focus: #7fb2f0;
+        --flag: #f0675b;
+        color-scheme: dark;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font: 15px/1.5 var(--font-body);
+        padding-block: 16px 10px;
+        padding-left: max(16px, env(safe-area-inset-left, 0px));
+        padding-right: max(16px, env(safe-area-inset-right, 0px));
+      }
+      .wrap {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: grid;
+        gap: 14px;
+      }
+      /* boards are sized to the screen height, so the whole lab fits without scrolling */
+
+      header {
+        display: grid;
+        gap: 4px;
+      }
+      h1 {
+        font-size: 1.7rem !important;
+        font-family: var(--font-display);
+        font-stretch: 112%;
+        font-weight: 800;
+        font-size: clamp(1.5rem, 3vw, 2rem);
+        line-height: 1.05;
+        letter-spacing: -0.01em;
+        margin: 0;
+        text-wrap: balance;
+      }
+      .lede {
+        margin: 0;
+        color: var(--muted);
+        max-width: 110ch;
+        font-size: 0.95rem;
+      }
+      .lede code {
+        white-space: nowrap;
+      }
+      .rule {
+        font-family: var(--font-data);
+        font-size: 0.82rem;
+        color: var(--muted);
+      }
+      .rule code {
+        color: var(--ink);
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px 22px;
+        align-items: flex-end;
+        padding: 10px 14px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+      }
+      .group {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+      }
+      .label {
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+      .seg {
+        display: flex;
+        flex-wrap: wrap;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        overflow: hidden;
+      }
+      .seg button {
+        flex: 1 1 auto;
+        justify-content: center;
+        font: 600 0.88rem var(--font-body);
+        color: var(--ink);
+        background: transparent;
+        border: 0;
+        border-right: 1px solid var(--line);
+        padding: 8px 12px;
+        cursor: pointer;
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .seg button:last-child {
+        border-right: 0;
+      }
+      .seg button[aria-pressed="true"] {
+        background: var(--ink);
+        color: var(--paper);
+      }
+      .swatch {
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        display: inline-block;
+        flex: none;
+      }
+
+      select,
+      .btn {
+        font: 600 0.88rem var(--font-body);
+        color: var(--ink);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      .btn.primary {
+        background: var(--astar);
+        border-color: var(--astar);
+        color: #fff;
+        min-width: 96px;
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      input[type="range"] {
+        width: 120px;
+        accent-color: var(--astar);
+      }
+      button:focus-visible,
+      select:focus-visible,
+      input:focus-visible,
+      canvas:focus-visible {
+        outline: 3px solid var(--focus);
+        outline-offset: 2px;
+      }
+
+      /* Two columns: the board fills the left, everything you read or press sits on the right. */
+      .app {
+        max-width: 1440px;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 14px 28px;
+        align-items: start;
+      }
+      .app.racing .board-area {
+        align-self: start;
+      }
+      .side {
+        display: grid;
+        gap: 12px;
+        min-width: 0;
+      }
+      .app > header,
+      .app > .toolbar {
+        grid-column: 1 / -1;
+      }
+      .board-area {
+        min-width: 0;
+        display: grid;
+        justify-items: center;
+      }
+      .boards {
+        display: grid;
+        gap: 14px;
+        width: 100%;
+        grid-template-columns: minmax(0, 1fr);
+        justify-items: center;
+      }
+      .boards.race {
+        grid-template-columns: repeat(3, minmax(0, calc(100svh - 290px)));
+        justify-content: center;
+      }
+      .board {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+        width: 100%;
+      }
+      .boards:not(.race) .board {
+        max-width: calc(100svh - 266px);
+      }
+
+      .board-head {
+        display: grid;
+        gap: 2px;
+      }
+      .board-name {
+        font-family: var(--font-display);
+        font-stretch: 100%;
+        font-weight: 700;
+        font-size: 1rem;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .board-stat {
+        font-family: var(--font-data);
+        font-size: 0.78rem;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .boards.race .board-stat {
+        min-height: 2.7em;
+      }
+      canvas {
+        width: 100%;
+        aspect-ratio: 1;
+        max-width: 100%;
+        display: block;
+        border-radius: 4px;
+        background: var(--low);
+      }
+      .toolbar {
+        flex-direction: row;
+        align-items: flex-end;
+        gap: 12px 24px;
+      }
+      @media (max-width: 960px) {
+        .app,
+        .app.racing {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .board-area {
+          order: 2;
+        }
+        .boards.race {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .boards:not(.race) .board {
+          max-width: 100%;
+        }
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 12px 14px;
+        display: grid;
+        gap: 8px;
+      }
+      .card h2 {
+        font-family: var(--font-display);
+        font-stretch: 100%;
+        font-size: 0.95rem;
+        margin: 0;
+      }
+      .readouts {
+        display: grid;
+        gap: 8px;
+      }
+      .readout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: baseline;
+      }
+      .readout .k {
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+      .readout .v {
+        font-family: var(--font-data);
+        font-size: 1.05rem;
+        font-variant-numeric: tabular-nums;
+      }
+      .verdict {
+        margin: 0;
+        font-size: 0.88rem;
+      }
+      .verdict strong {
+        font-weight: 700;
+      }
+      .legend {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 5px 12px;
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+      .legend div {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .ramp {
+        height: 10px;
+        width: 64px;
+        border-radius: 2px;
+        background: linear-gradient(90deg, var(--low), var(--high));
+        flex: none;
+      }
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--seen);
+        flex: none;
+      }
+      .hint {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      footer {
+        font-size: 0.76rem;
+        color: var(--muted);
+      }
+      footer a {
+        color: var(--astar);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap app">
+      <header>
+        <h1>Pathfinder Terrain Lab</h1>
+        <p class="lede">
+          Pick an algorithm and press Run. Once it finds a route to the flag,
+          the hiker walks it, slowing on every climb: each step costs
+          <code>1 + max(0, climb)</code>.
+        </p>
+      </header>
+      <section class="toolbar" aria-label="Controls">
+        <div class="group">
+          <span class="label" id="lbl-algo">Algorithm</span>
+          <div class="seg" role="group" aria-labelledby="lbl-algo" id="algo">
+            <button type="button" data-algo="bfs">
+              <span class="swatch" style="background: var(--bfs)"></span>BFS
+            </button>
+            <button type="button" data-algo="ucs">
+              <span class="swatch" style="background: var(--dijkstra)"></span
+              >Dijkstra
+            </button>
+            <button type="button" data-algo="astar">
+              <span class="swatch" style="background: var(--astar)"></span>A*
+            </button>
+            <button type="button" data-algo="race">Race all three</button>
+          </div>
+        </div>
+        <div class="group">
+          <span class="label">Search</span>
+          <div class="actions">
+            <button type="button" class="btn primary" id="run">Run</button>
+            <button type="button" class="btn" id="step">Step</button>
+            <button type="button" class="btn" id="clear">Clear</button>
+            <button type="button" class="btn" id="shuffle">New walls</button>
+          </div>
+        </div>
+        <div class="group">
+          <label class="label" for="speed">Speed</label>
+          <div class="actions">
+            <input type="range" id="speed" min="1" max="10" value="7" />
+          </div>
+        </div>
+      </section>
+      <main class="board-area" aria-label="Search board">
+        <div class="boards" id="boards"></div>
+      </main>
+      <div class="side">
+        <div class="card" aria-live="polite">
+          <h2 id="result-title">Result</h2>
+          <div class="readouts" id="readouts"></div>
+          <p class="verdict" id="verdict"></p>
+        </div>
+        <div class="card">
+          <h2>Reading the board</h2>
+          <div class="legend">
+            <div><span class="ramp" style="width: 24px"></span>Low to high</div>
+            <div>
+              <span
+                class="swatch"
+                style="background: var(--wall); width: 14px; height: 14px"
+              ></span
+              >Wall
+            </div>
+            <div>
+              <span
+                class="swatch"
+                style="
+                  background: var(--flag);
+                  width: 14px;
+                  height: 10px;
+                  clip-path: polygon(0 0, 100% 40%, 0 80%);
+                "
+              ></span
+              >Flag (goal)
+            </div>
+            <div>
+              <span
+                class="swatch"
+                style="
+                  border: 2px dashed var(--muted);
+                  background: transparent;
+                  width: 14px;
+                  height: 14px;
+                  border-radius: 50%;
+                "
+              ></span
+              >Trailhead (start)
+            </div>
+            <div><span class="dot"></span>Cells examined</div>
+            <div>
+              <span
+                class="swatch"
+                style="background: var(--astar); height: 4px; width: 22px"
+              ></span
+              >Route found
+            </div>
+          </div>
+        </div>
+        <footer>
+          Same algorithms as <code>pathfinder.py</code>, checked to give
+          identical results on every bundled map. Source on
+          <a
+            href="https://github.com/Agrim1305/Pathfinder"
+            target="_blank"
+            rel="noopener"
+            >GitHub</a
+          >.
+        </footer>
+      </div>
+    </div>
+
+    <script src="pathfinder.js"></script>
+    <script src="maps.js"></script>
+    <script>
+      (() => {
+        const PF = window.Pathfinder;
+        const ALGOS = {
+          bfs: {
+            name: "BFS",
+            colour: "--bfs",
+            note: "finds the route with the fewest steps and ignores hills",
+          },
+          ucs: {
+            name: "Dijkstra",
+            colour: "--dijkstra",
+            note: "finds the lowest-effort route by searching outward in every direction",
+          },
+          astar: {
+            name: "A*",
+            colour: "--astar",
+            note: "finds the lowest-effort route by heading towards the goal first",
+          },
+        };
+        const MAX_ELEV = 9;
+        const reduceMotion = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+
+        const state = {
+          mode: "race",
+          rows: 0,
+          cols: 0,
+          grid: [],
+          start: [0, 0],
+          end: [0, 0],
+          runs: {}, // algo -> { result, shown, done }
+          playing: false,
+        };
+
+        const $ = (id) => document.getElementById(id);
+        const boardsEl = $("boards");
+        let boards = []; // { algo, canvas, statEl }
+
+        const css = (name) =>
+          getComputedStyle(document.documentElement)
+            .getPropertyValue(name)
+            .trim();
+
+        // ---------- map ----------
+        // One map: maps/detour.txt, designed so the difference between the algorithms is easy to see
+        // Scatter new walls on the same terrain. Keeps the start and goal clear and
+        // retries until a route exists, so every shuffle can still be solved.
+        function shuffleWalls() {
+          const base = PF.parseMap(window.PATHFINDER_MAPS.detour);
+          for (let attempt = 0; attempt < 50; attempt++) {
+            const grid = base.grid.map((row) =>
+              row.map((v) => (v === -1 ? 0 : v)),
+            );
+            const count = Math.round(state.rows * state.cols * 0.14);
+            for (let i = 0; i < count; i++) {
+              const r = Math.floor(Math.random() * state.rows),
+                c = Math.floor(Math.random() * state.cols);
+              const nearStart = r <= 1 && c <= 1,
+                nearGoal = r >= state.rows - 2 && c >= state.cols - 2;
+              if (!nearStart && !nearGoal) grid[r][c] = -1;
+            }
+            if (
+              PF.search(
+                "bfs",
+                state.rows,
+                state.cols,
+                state.start,
+                state.end,
+                grid,
+              ).path
+            ) {
+              state.grid = grid;
+              terrainChanged();
+              clearRuns();
+              return;
+            }
+          }
+        }
+
+        function setMap() {
+          const m = PF.parseMap(window.PATHFINDER_MAPS.detour);
+          Object.assign(state, {
+            rows: m.rows,
+            cols: m.cols,
+            grid: m.grid.map((r) => r.slice()),
+            start: m.start.slice(),
+            end: m.end.slice(),
+          });
+          terrainChanged();
+          clearRuns();
+        }
+
+        // ---------- boards ----------
+        function algosForMode() {
+          return state.mode === "race" ? ["bfs", "ucs", "astar"] : [state.mode];
+        }
+
+        function buildBoards() {
+          boardsEl.classList.toggle("race", state.mode === "race");
+          document
+            .querySelector(".app")
+            .classList.toggle("racing", state.mode === "race");
+          boardsEl.innerHTML = "";
+          boards = algosForMode().map((algo) => {
+            const wrap = document.createElement("div");
+            wrap.className = "board";
+            wrap.innerHTML = `<div class="board-head"><span class="board-name"><span class="swatch" style="background:var(${ALGOS[algo].colour})"></span>${ALGOS[algo].name}</span><span class="board-stat"></span></div>`;
+            const canvas = document.createElement("canvas");
+            canvas.setAttribute("role", "img");
+            canvas.setAttribute(
+              "aria-label",
+              `${ALGOS[algo].name} search board`,
+            );
+            wrap.appendChild(canvas);
+            boardsEl.appendChild(wrap);
+            return { algo, canvas, statEl: wrap.querySelector(".board-stat") };
+          });
+          resizeAll();
+        }
+
+        function resizeAll() {
+          const dpr = window.devicePixelRatio || 1;
+          for (const b of boards) {
+            const w = b.canvas.clientWidth || 300;
+            b.canvas.width = Math.round(w * dpr);
+            b.canvas.height = Math.round(w * dpr);
+          }
+          drawAll();
+        }
+
+        // ---------- drawing ----------
+        function mix(a, b, t) {
+          const pa = parseColour(a),
+            pb = parseColour(b);
+          const v = pa.map((x, i) => Math.round(x + (pb[i] - x) * t));
+          return `rgb(${v[0]},${v[1]},${v[2]})`;
+        }
+        function parseColour(hex) {
+          const h = hex.replace("#", "");
+          return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+        }
+
+        // ---------- terrain rendering ----------
+        // The terrain is drawn as smooth shaded relief: heights are blended between cell
+        // centres with a very light top-left shade. This is display only; the search itself
+        // still works on the exact grid values.
+        let terrainCache = { key: "", canvas: null };
+        let terrainVersion = 0;
+        function terrainChanged() {
+          terrainVersion++;
+        }
+
+        function heightField() {
+          // Walls take the average of the open ground around them, so they don't leave pits.
+          return state.grid.map((row, r) =>
+            row.map((v, c) => {
+              if (v !== -1) return v;
+              let sum = 0,
+                n = 0;
+              for (const [nr, nc] of [
+                [r - 1, c],
+                [r + 1, c],
+                [r, c - 1],
+                [r, c + 1],
+              ]) {
+                const w = state.grid[nr] && state.grid[nr][nc];
+                if (w !== undefined && w !== -1) {
+                  sum += w;
+                  n++;
+                }
+              }
+              return n ? sum / n : 0;
+            }),
+          );
+        }
+
+        function terrainImage() {
+          const low = css("--low"),
+            high = css("--high"),
+            ink = css("--ink");
+          const key = [
+            terrainVersion,
+            state.rows,
+            state.cols,
+            low,
+            high,
+            ink,
+          ].join("|");
+          if (terrainCache.key === key) return terrainCache.canvas;
+
+          const px = 640,
+            n = Math.max(state.rows, state.cols),
+            cellPx = px / n;
+          const raw = heightField();
+          // a light 3x3 blur, for display only, so neighbouring cells blend into hills
+          const H = raw.map((row, r) =>
+            row.map((_, c) => {
+              let sum = 0,
+                w = 0;
+              for (let dr = -1; dr <= 1; dr++)
+                for (let dc = -1; dc <= 1; dc++) {
+                  const v = raw[r + dr] && raw[r + dr][c + dc];
+                  if (v === undefined) continue;
+                  const k = (dr === 0 ? 2 : 1) * (dc === 0 ? 2 : 1);
+                  sum += v * k;
+                  w += k;
+                }
+              return sum / w;
+            }),
+          );
+          // colour scale runs from 0 to this map's highest ground (at least 4), so low maps still show relief
+          const top = Math.max(4, ...state.grid.flat());
+          const smooth = (t) => t; // straight linear blend: no banding between cells
+          const at = (r, c) =>
+            H[Math.min(state.rows - 1, Math.max(0, r))][
+              Math.min(state.cols - 1, Math.max(0, c))
+            ];
+
+          const field = new Float32Array(px * px);
+          for (let y = 0; y < px; y++) {
+            const v = y / cellPx - 0.5,
+              r0 = Math.floor(v),
+              ty = smooth(v - r0);
+            for (let x = 0; x < px; x++) {
+              const u = x / cellPx - 0.5,
+                c0 = Math.floor(u),
+                tx = smooth(u - c0);
+              const top = at(r0, c0) + (at(r0, c0 + 1) - at(r0, c0)) * tx;
+              const bot =
+                at(r0 + 1, c0) + (at(r0 + 1, c0 + 1) - at(r0 + 1, c0)) * tx;
+              field[y * px + x] = top + (bot - top) * ty;
+            }
+          }
+
+          // Flat bands, no gradients: every whole unit of height gets one solid colour,
+          // like the layers on a printed topographic map, with a thin line where bands meet.
+          const cLow = parseColour(low),
+            cHigh = parseColour(high),
+            cInk = parseColour(ink);
+          const levels = Math.max(1, top);
+          const bandColour = [];
+          for (let k = 0; k <= levels; k++)
+            bandColour.push(
+              cLow.map((lo, j) =>
+                Math.round(lo + (cHigh[j] - lo) * Math.min(1, k / levels)),
+              ),
+            );
+          const band = (h) => Math.min(levels, Math.max(0, Math.round(h)));
+          const canvas = document.createElement("canvas");
+          canvas.width = canvas.height = px;
+          const g = canvas.getContext("2d");
+          const img = g.createImageData(px, px),
+            d = img.data;
+          for (let y = 0; y < px; y++) {
+            for (let x = 0; x < px; x++) {
+              const i = y * px + x,
+                b0 = band(field[i]);
+              const edge =
+                b0 !== band(field[y * px + Math.min(px - 1, x + 1)]) ||
+                b0 !== band(field[Math.min(px - 1, y + 1) * px + x]);
+              const rgb = edge
+                ? bandColour[b0].map((v, j) =>
+                    Math.round(v + (cInk[j] - v) * 0.35),
+                  )
+                : bandColour[b0];
+              d[i * 4] = rgb[0];
+              d[i * 4 + 1] = rgb[1];
+              d[i * 4 + 2] = rgb[2];
+              d[i * 4 + 3] = 255;
+            }
+          }
+          g.putImageData(img, 0, 0);
+          terrainCache = { key, canvas };
+          return canvas;
+        }
+
+        function drawGrid(ctx, cell, size) {
+          ctx.save();
+          ctx.strokeStyle = css("--ink");
+          ctx.globalAlpha = 0.12;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          for (let i = 1; i < state.rows; i++) {
+            ctx.moveTo(0, Math.round(i * cell) + 0.5);
+            ctx.lineTo(size, Math.round(i * cell) + 0.5);
+          }
+          for (let i = 1; i < state.cols; i++) {
+            ctx.moveTo(Math.round(i * cell) + 0.5, 0);
+            ctx.lineTo(Math.round(i * cell) + 0.5, size);
+          }
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        function drawWalls(ctx, cell) {
+          const wall = css("--wall"),
+            inset = cell * 0.07,
+            radius = cell * 0.22;
+          ctx.save();
+          ctx.shadowColor = "rgba(0,0,0,0.25)";
+          ctx.shadowBlur = cell * 0.25;
+          ctx.shadowOffsetY = cell * 0.06;
+          ctx.fillStyle = wall;
+          for (let r = 0; r < state.rows; r++) {
+            for (let c = 0; c < state.cols; c++) {
+              if (state.grid[r][c] !== -1) continue;
+              ctx.beginPath();
+              ctx.roundRect(
+                c * cell + inset,
+                r * cell + inset,
+                cell - 2 * inset,
+                cell - 2 * inset,
+                radius,
+              );
+              ctx.fill();
+            }
+          }
+          ctx.restore();
+        }
+
+        function draw(board) {
+          const { canvas, algo } = board;
+          const ctx = canvas.getContext("2d");
+          const size = canvas.width,
+            cell = size / Math.max(state.rows, state.cols);
+          const low = css("--low"),
+            high = css("--high"),
+            wall = css("--wall");
+          ctx.clearRect(0, 0, size, size);
+          ctx.imageSmoothingEnabled = true;
+          ctx.drawImage(terrainImage(), 0, 0, size, size);
+          drawGrid(ctx, cell, size);
+          drawWalls(ctx, cell);
+
+          const run = state.runs[algo];
+          if (run && !run.done) {
+            const seen = new Set();
+            ctx.fillStyle = css("--seen");
+            const upto = Math.min(run.shown, run.result.order.length);
+            for (let i = 0; i < upto; i++) {
+              const [r, c] = run.result.order[i];
+              const k = r * 1000 + c;
+              if (seen.has(k)) continue;
+              seen.add(k);
+              ctx.globalAlpha = 0.8;
+              ctx.beginPath();
+              ctx.arc(
+                (c + 0.5) * cell,
+                (r + 0.5) * cell,
+                Math.max(1.8, cell * 0.13),
+                0,
+                Math.PI * 2,
+              );
+              ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+            // the cell currently being examined
+            if (upto > 0) {
+              const [r, c] = run.result.order[upto - 1];
+              ctx.strokeStyle = css("--ink");
+              ctx.lineWidth = Math.max(2, cell * 0.07);
+              ctx.beginPath();
+              ctx.arc(
+                (c + 0.5) * cell,
+                (r + 0.5) * cell,
+                cell * 0.36,
+                0,
+                Math.PI * 2,
+              );
+              ctx.stroke();
+            }
+          }
+          if (run && run.done && run.result.path) {
+            {
+              const p = run.result.path;
+              const n = Math.min(p.length, run.pathShown);
+              ctx.lineCap = "round";
+              ctx.lineJoin = "round";
+              ctx.beginPath();
+              for (let i = 0; i < n; i++) {
+                const x = (p[i][1] + 0.5) * cell,
+                  y = (p[i][0] + 0.5) * cell;
+                i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+              }
+              ctx.strokeStyle = css("--panel");
+              ctx.lineWidth = Math.max(5, cell * 0.3);
+              ctx.stroke();
+              ctx.strokeStyle = css(ALGOS[algo].colour);
+              ctx.lineWidth = Math.max(3, cell * 0.18);
+              ctx.stroke();
+            }
+          }
+
+          drawTrailhead(ctx, state.start, cell);
+          const [hx, hy, dir] = hikerPosition(run, cell);
+          drawHiker(
+            ctx,
+            hx,
+            hy,
+            cell,
+            css(ALGOS[algo].colour),
+            run ? run.walk || 0 : 0,
+            dir < 0,
+            size,
+          );
+          drawFlag(ctx, state.end, cell);
+        }
+
+        // ---------- hiker, trailhead and flag ----------
+        // The hiker walks the route at a speed set by the real step cost: each step takes
+        // time in proportion to 1 + climb, so every hill visibly slows it down.
+        function walkReady(run) {
+          return (
+            run &&
+            run.done &&
+            run.result.path &&
+            run.pathShown >= run.result.path.length
+          );
+        }
+
+        function hikerPosition(run, cell) {
+          const centre = ([r, c]) => [(c + 0.5) * cell, (r + 0.5) * cell];
+          if (!walkReady(run) || !run.walk) return centre(state.start);
+          const p = run.result.path;
+          let acc = 0;
+          for (let i = 0; i < p.length - 1; i++) {
+            const seg = PF.stepCost(state.grid, ...p[i], ...p[i + 1]);
+            if (run.walk <= acc + seg) {
+              const t = (run.walk - acc) / seg,
+                [x1, y1] = centre(p[i]),
+                [x2, y2] = centre(p[i + 1]);
+              return [
+                x1 + (x2 - x1) * t,
+                y1 + (y2 - y1) * t,
+                Math.sign(x2 - x1),
+              ];
+            }
+            acc += seg;
+          }
+          return centre(p[p.length - 1]);
+        }
+
+        // Hiker sprite: a flat illustration (hat, jacket, backpack in the algorithm's colour,
+        // boots and a trekking pole), drawn from inline SVG with two walking frames.
+        const spriteCache = new Map();
+        function hikerSVG(pack, frame) {
+          const legs =
+            frame === 0
+              ? '<path d="M30 41 L25 50 L21 57" /><path d="M33 41 L37 49 L41 56" />'
+              : '<path d="M30 41 L30 50 L28 57" /><path d="M33 41 L34 50 L35 57" />';
+          const boots =
+            frame === 0
+              ? '<rect x="16" y="55" width="8" height="4" rx="1.5"/><rect x="38" y="54" width="8" height="4" rx="1.5"/>'
+              : '<rect x="24" y="55" width="8" height="4" rx="1.5"/><rect x="32" y="55" width="8" height="4" rx="1.5"/>';
+          return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+      <ellipse cx="32" cy="60" rx="15" ry="2.6" fill="#000" opacity=".18"/>
+      <line x1="46" y1="22" x2="49" y2="59" stroke="#6b6f66" stroke-width="2.2" stroke-linecap="round"/>
+      <g fill="none" stroke="#3a3f45" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round">${legs}</g>
+      <g fill="#2a2420">${boots}</g>
+      <rect x="15" y="17" width="12" height="20" rx="3.5" fill="${pack}"/>
+      <rect x="15" y="17" width="12" height="6" rx="3" fill="#000" opacity=".18"/>
+      <rect x="17" y="27" width="8" height="5" rx="1.5" fill="#000" opacity=".14"/>
+      <path d="M24 21 Q24 18 27 18 L36 18 Q40 18 40 22 L40 41 L24 41 Z" fill="#46604a"/>
+      <path d="M24 34 L40 34 L40 41 L24 41 Z" fill="#000" opacity=".12"/>
+      <path d="M36 22 L45 30" stroke="#46604a" stroke-width="5" stroke-linecap="round" fill="none"/>
+      <circle cx="46" cy="31" r="2.4" fill="#e3ab84"/>
+      <circle cx="33" cy="12.5" r="6" fill="#e3ab84"/>
+      <path d="M26 9.5 Q33 2 40 9.5 Z" fill="#b8874a"/>
+      <rect x="23" y="9" width="20" height="2.8" rx="1.4" fill="#9a6d36"/>
+      <circle cx="36" cy="13" r=".9" fill="#2a2420"/>
+    </svg>`;
+        }
+        function hikerSprite(colour, frame) {
+          const key = colour + frame;
+          if (!spriteCache.has(key)) {
+            const img = new Image();
+            img.onload = () => drawAll();
+            img.src =
+              "data:image/svg+xml;charset=utf-8," +
+              encodeURIComponent(hikerSVG(colour, frame));
+            spriteCache.set(key, img);
+          }
+          return spriteCache.get(key);
+        }
+
+        function drawHiker(ctx, x, y, cell, colour, walk, facingLeft, size) {
+          const s = Math.max(30, cell * 1.7),
+            half = s / 2;
+          const img = hikerSprite(colour, Math.floor(walk * 2.2) % 2);
+          if (!img.complete || !img.naturalWidth) return;
+          // stand on the cell, but never draw past the edge of the board
+          const cx = Math.min(size - half, Math.max(half, x));
+          const cy = Math.min(size - half, Math.max(half, y - s * 0.3));
+          ctx.save();
+          ctx.translate(cx, cy);
+          if (facingLeft) ctx.scale(-1, 1);
+          ctx.drawImage(img, -s / 2, -s / 2, s, s);
+          ctx.restore();
+        }
+
+        function drawTrailhead(ctx, [r, c], cell) {
+          const x = (c + 0.5) * cell,
+            y = (r + 0.5) * cell,
+            rad = Math.max(4, cell * 0.22);
+          ctx.save();
+          ctx.strokeStyle = css("--ink");
+          ctx.lineWidth = Math.max(1.5, cell * 0.06);
+          ctx.setLineDash([cell * 0.12, cell * 0.08]);
+          ctx.beginPath();
+          ctx.arc(x, y, rad * 1.6, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        function drawFlag(ctx, [r, c], cell) {
+          const x = (c + 0.5) * cell + cell * 0.12,
+            y = (r + 0.5) * cell,
+            s = Math.max(22, cell * 1.25);
+          ctx.save();
+          ctx.strokeStyle = css("--ink");
+          ctx.lineCap = "round";
+          ctx.lineWidth = Math.max(1.6, s * 0.07);
+          ctx.beginPath();
+          ctx.moveTo(x - s * 0.15, y + s * 0.38);
+          ctx.lineTo(x - s * 0.15, y - s * 0.4);
+          ctx.stroke();
+          ctx.fillStyle = css("--flag");
+          ctx.beginPath();
+          ctx.moveTo(x - s * 0.13, y - s * 0.4);
+          ctx.lineTo(x + s * 0.32, y - s * 0.24);
+          ctx.lineTo(x - s * 0.13, y - s * 0.07);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = css("--ink");
+          ctx.globalAlpha = 0.25;
+          ctx.beginPath();
+          ctx.ellipse(
+            x - s * 0.15,
+            y + s * 0.38,
+            s * 0.16,
+            s * 0.05,
+            0,
+            0,
+            Math.PI * 2,
+          );
+          ctx.fill();
+          ctx.restore();
+        }
+
+        function drawAll() {
+          boards.forEach(draw);
+          updateReadouts();
+        }
+
+        // ---------- running ----------
+        function clearRuns() {
+          state.runs = {};
+          stop();
+          drawAll();
+        }
+
+        function prepareRuns() {
+          for (const algo of algosForMode()) {
+            if (!state.runs[algo]) {
+              const result = PF.search(
+                algo,
+                state.rows,
+                state.cols,
+                state.start,
+                state.end,
+                state.grid,
+                "manhattan",
+              );
+              state.runs[algo] = {
+                result,
+                shown: 0,
+                pathShown: 0,
+                done: false,
+                walk: 0,
+                total: PF.pathCost(state.grid, result.path) || 0,
+              };
+            }
+          }
+        }
+
+        function routesReady() {
+          return algosForMode().every(
+            (a) =>
+              state.runs[a] &&
+              state.runs[a].done &&
+              state.runs[a].pathShown >=
+                (state.runs[a].result.path || []).length,
+          );
+        }
+        function allDone() {
+          return (
+            routesReady() &&
+            algosForMode().every(
+              (a) =>
+                !state.runs[a].result.path ||
+                state.runs[a].walk >= state.runs[a].total,
+            )
+          );
+        }
+
+        function advance(stepsPerTick, walkCost = 0) {
+          if (routesReady()) {
+            for (const algo of algosForMode()) {
+              const run = state.runs[algo];
+              run.walk = Math.min(run.total, run.walk + walkCost);
+            }
+            drawAll();
+            return;
+          }
+          for (const algo of algosForMode()) {
+            const run = state.runs[algo];
+            if (!run.done) {
+              run.shown = Math.min(
+                run.result.order.length,
+                run.shown + stepsPerTick,
+              );
+              if (run.shown >= run.result.order.length) run.done = true;
+            } else if (
+              run.result.path &&
+              run.pathShown < run.result.path.length
+            ) {
+              run.pathShown = Math.min(
+                run.result.path.length,
+                run.pathShown + Math.max(1, Math.ceil(stepsPerTick / 2)),
+              );
+            }
+          }
+          drawAll();
+        }
+
+        let timer = null;
+        function play() {
+          prepareRuns();
+          if (allDone()) {
+            for (const a of algosForMode())
+              Object.assign(state.runs[a], {
+                shown: 0,
+                pathShown: 0,
+                done: false,
+                walk: 0,
+              });
+          }
+          if (reduceMotion) {
+            advance(1e9);
+            advance(1e9);
+            advance(0, 1e9);
+            return;
+          }
+          state.playing = true;
+          $("run").textContent = "Pause";
+          let last = performance.now();
+          const tick = () => {
+            if (!state.playing) return;
+            const speed = Number($("speed").value),
+              now = performance.now();
+            // walking speed in cost units per second: a climb of 5 takes 6 times as long as flat ground
+            advance(
+              Math.max(1, Math.round((speed * speed) / 6)),
+              ((now - last) / 1000) * (3 + speed),
+            );
+            last = now;
+            if (allDone()) {
+              stop();
+              return;
+            }
+            timer = setTimeout(
+              () => requestAnimationFrame(tick),
+              70 - speed * 6,
+            );
+          };
+          tick();
+        }
+        function stop() {
+          state.playing = false;
+          clearTimeout(timer);
+          $("run").textContent = "Run";
+        }
+
+        // ---------- readouts ----------
+        function updateReadouts() {
+          const ro = $("readouts");
+          ro.innerHTML = "";
+          const lines = [];
+          for (const b of boards) {
+            const run = state.runs[b.algo];
+            if (!run) {
+              b.statEl.textContent = "ready";
+              continue;
+            }
+            const examined = Math.min(run.shown, run.result.order.length);
+            const cost = run.done
+              ? PF.pathCost(state.grid, run.result.path)
+              : null;
+            const steps =
+              run.done && run.result.path ? run.result.path.length - 1 : null;
+            const walking =
+              run.done &&
+              run.result.path &&
+              run.walk > 0 &&
+              run.walk < run.total;
+            b.statEl.textContent = !run.done
+              ? `${examined} examined`
+              : !run.result.path
+                ? `${examined} examined · no route`
+                : walking
+                  ? `${examined} examined · hiking, effort ${Math.floor(run.walk)} of ${cost}`
+                  : `${examined} examined · effort ${cost}`;
+            lines.push({
+              algo: b.algo,
+              examined,
+              cost,
+              steps,
+              done: run.done,
+              found: !!run.result.path,
+            });
+          }
+          const rows =
+            state.mode === "race"
+              ? lines
+              : lines.flatMap((l) => [
+                  { k: "Cells examined", v: l.examined },
+                  {
+                    k: "Route length (steps)",
+                    v: l.done ? (l.found ? l.steps : "none") : "…",
+                  },
+                  {
+                    k: "Route effort",
+                    v: l.done ? (l.found ? l.cost : "none") : "…",
+                  },
+                ]);
+          if (state.mode === "race") {
+            $("result-title").textContent = "Race result";
+            for (const l of lines) {
+              const div = document.createElement("div");
+              div.className = "readout";
+              div.innerHTML = `<span class="k"><span class="swatch" style="background:var(${ALGOS[l.algo].colour})"></span> ${ALGOS[l.algo].name}</span><span class="v">${l.done ? (l.found ? `effort ${l.cost}` : "no route") : `${l.examined}…`}</span>`;
+              ro.appendChild(div);
+            }
+          } else {
+            $("result-title").textContent = ALGOS[state.mode].name;
+            for (const r of rows) {
+              const div = document.createElement("div");
+              div.className = "readout";
+              div.innerHTML = `<span class="k">${r.k}</span><span class="v">${r.v}</span>`;
+              ro.appendChild(div);
+            }
+          }
+          $("verdict").innerHTML = verdict(lines);
+        }
+
+        function verdict(lines) {
+          if (!lines.length)
+            return state.mode === "race"
+              ? "Press <strong>Run</strong> to race BFS, Dijkstra and A* on this terrain."
+              : `Press <strong>Run</strong> to watch ${ALGOS[state.mode].name} search. It ${ALGOS[state.mode].note}.`;
+          if (!lines.every((l) => l.done)) return "Searching…";
+          if (!lines.some((l) => l.found))
+            return "There is no route: walls cut the goal off. Clear a gap and run again.";
+          if (state.mode !== "race")
+            return `${ALGOS[state.mode].name} ${ALGOS[state.mode].note}. Switch to <strong>Race all three</strong> to compare.`;
+          const by = Object.fromEntries(lines.map((l) => [l.algo, l]));
+          const best = Math.min(...lines.map((l) => l.cost));
+          const parts = [];
+          const extra = Math.round((by.bfs.cost / best - 1) * 100);
+          if (by.bfs.cost > best && by.bfs.steps < by.ucs.steps)
+            parts.push(
+              `BFS found a shorter route, but it costs <strong>${extra}% more effort</strong> (${by.bfs.cost} vs ${best}).`,
+            );
+          else if (by.bfs.cost > best)
+            parts.push(
+              `BFS only counts steps, so it picked a route of the same length that climbs more and costs <strong>${extra}% more effort</strong> (${by.bfs.cost} vs ${best}).`,
+            );
+          else
+            parts.push(
+              `Here the fewest-step route is also the easiest, so BFS ties on effort (${best}).`,
+            );
+          if (by.astar.examined < by.ucs.examined)
+            parts.push(
+              `A* matched Dijkstra's route while examining <strong>${Math.round((1 - by.astar.examined / by.ucs.examined) * 100)}% fewer cells</strong>.`,
+            );
+          else
+            parts.push(
+              "A* and Dijkstra examined the same number of cells: on flat ground the heuristic has nothing to add.",
+            );
+          return parts.join(" ");
+        }
+
+        // ---------- controls ----------
+        function setPressed(groupId, attr, value) {
+          for (const b of $(groupId).querySelectorAll("button"))
+            b.setAttribute("aria-pressed", String(b.dataset[attr] === value));
+        }
+
+        $("algo").addEventListener("click", (ev) => {
+          const b = ev.target.closest("button");
+          if (!b) return;
+          state.mode = b.dataset.algo;
+          setPressed("algo", "algo", state.mode);
+          stop();
+          buildBoards();
+        });
+        $("run").addEventListener("click", () =>
+          state.playing ? stop() : play(),
+        );
+        $("step").addEventListener("click", () => {
+          stop();
+          prepareRuns();
+          advance(1);
+        });
+        $("clear").addEventListener("click", clearRuns);
+        $("shuffle").addEventListener("click", shuffleWalls);
+        window.addEventListener("resize", resizeAll);
+        window
+          .matchMedia("(prefers-color-scheme: dark)")
+          .addEventListener("change", drawAll);
+        new MutationObserver(drawAll).observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ["data-theme"],
+        });
+
+        // ---------- start ----------
+        setPressed("algo", "algo", state.mode);
+        setMap();
+        shuffleWalls();
+        buildBoards();
+        // open on a finished race so the first view already shows the point
+        prepareRuns();
+        for (const a of algosForMode()) {
+          const r = state.runs[a];
+          Object.assign(r, {
+            shown: r.result.order.length,
+            done: true,
+            pathShown: (r.result.path || []).length,
+            walk: r.total,
+          });
+        }
+        drawAll();
+      })();
+    </script>
+  </body>
+</html>
