@@ -1,4 +1,4 @@
 # No external dependencies required.
 # Pathfinder uses only Python standard library (heapq, collections, typing, math, sys).
-# Runs on Python 3.9+
+# Runs on Python 3.10+
 # Optional, only for visualize.py: matplotlib

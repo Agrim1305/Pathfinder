@@ -53,7 +53,7 @@ What the numbers show:
 
 ## Quick start
 
-Requires Python 3.9 or newer. No packages to install.
+Requires Python 3.10 or newer. No packages to install.
 
 ```bash
 # Lowest-cost route with A*
