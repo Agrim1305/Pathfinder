@@ -585,3 +585,27 @@
   background: var(--primary-bg);
   color: var(--primary-ink);
 }
+
+/* ---------- random map settings ---------- */
+.random-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  font-size: 13px;
+}
+.random-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.random-row select {
+  min-height: 34px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: 1px solid var(--edge);
+  background: var(--surface);
+  font-size: 13px;
+}

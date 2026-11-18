@@ -119,7 +119,8 @@ for t in tests/compare_js.js tests/test_*.js; do node "$t"; done
 and Node checks for the browser code: `compare_js.js` (the demo matches the Python code),
 `test_trace.js` (recording a trace never changes a search), `test_layers.js` (the numbers on
 the page, such as the cells A\* skipped), `test_terrain.js`, `test_view.js` (the shared map
-camera), `test_labels.js` (map labels never overlap each other, a pin or a control) and
+camera), `test_labels.js` (map labels never overlap each other, a pin or a control),
+`test_generate.js` (a seed always gives the same random map, with the pins connected) and
 `test_contrast.js` (every text and control colour meets WCAG AA in both themes).
 GitHub Actions runs them all on every push. The Adelaide tests need Node and NetworkX
 (`pip install -r tools/requirements.txt`) and skip themselves without them; CI installs both

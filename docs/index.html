@@ -8,15 +8,15 @@
       name="description"
       content="Watch BFS, Dijkstra and A* search hilly ground for the lowest-effort route, with every number from a real run."
     />
-    <script src="shared/theme.js?v=21"></script>
+    <script src="shared/theme.js?v=24"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
     />
-    <link rel="stylesheet" href="shared/theme.css?v=21" />
-    <link rel="stylesheet" href="styles.css?v=21" />
+    <link rel="stylesheet" href="shared/theme.css?v=24" />
+    <link rel="stylesheet" href="styles.css?v=24" />
   </head>
   <body>
     <header class="top">
@@ -30,6 +30,7 @@
         </nav>
         <label class="top-label" for="map">Map</label>
         <select id="map"></select>
+        <button type="button" class="btn" id="shuffle" title="A new random map; the seed goes in the link">Shuffle</button>
         <button type="button" class="btn theme-btn" data-theme-toggle aria-label="Theme: System" title="Cycle the theme: System, Light, Dark">
           <svg class="i-system" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></svg>
           <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>
@@ -77,6 +78,13 @@
           <span><i class="lg-ring"></i>In the queue</span>
           <span><i class="lg-now"></i>Expanding now</span>
           <span><i class="lg-ramp"></i>Elevation 0 to 9</span>
+        </div>
+        <div class="random-row" id="randomRow" hidden>
+          <span class="tools-label">Random map</span>
+          <label>Size <select id="rSize"><option value="14">14 by 14</option><option value="20">20 by 20</option><option value="28">28 by 28</option></select></label>
+          <label>Creeks <select id="rCreeks"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+          <label>Hills <select id="rHills"><option value="flat">Flat</option><option value="rolling">Rolling</option><option value="steep">Steep</option></select></label>
+          <span class="mono dim" id="rSeed"></span>
         </div>
         <div class="tools">
           <span class="tools-label" id="tools-label">Click a cell to</span>
@@ -170,15 +178,16 @@
       </aside>
     </div>
 
-    <script src="pathfinder.js?v=21"></script>
-    <script src="maps.js?v=21"></script>
-    <script src="terrain.js?v=21"></script>
-    <script src="runs.js?v=21"></script>
-    <script src="shared/view.js?v=21"></script>
-    <script src="shared/labels.js?v=21"></script>
-    <script src="shared/scroll.js?v=21"></script>
-    <script src="board.js?v=21"></script>
-    <script src="grid3d.js?v=21"></script>
-    <script src="app.js?v=21"></script>
+    <script src="pathfinder.js?v=24"></script>
+    <script src="maps.js?v=24"></script>
+    <script src="terrain.js?v=24"></script>
+    <script src="runs.js?v=24"></script>
+    <script src="generate.js?v=24"></script>
+    <script src="shared/view.js?v=24"></script>
+    <script src="shared/labels.js?v=24"></script>
+    <script src="shared/scroll.js?v=24"></script>
+    <script src="board.js?v=24"></script>
+    <script src="grid3d.js?v=24"></script>
+    <script src="app.js?v=24"></script>
   </body>
 </html>

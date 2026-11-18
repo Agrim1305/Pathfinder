@@ -5,7 +5,7 @@
  */
 (function () {
   "use strict";
-  const PF = window.Pathfinder, T = window.Terrain, Runs = window.Runs, Board = window.Board;
+  const PF = window.Pathfinder, T = window.Terrain, Runs = window.Runs, Board = window.Board, Gen = window.Generate;
   const $ = (id) => document.getElementById(id);
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const MAPS = { detour: "Detour", choice: "Choice", small: "Small", maze: "Maze", open: "Open field", large: "Large" };
@@ -42,10 +42,11 @@
     layers: { explored: true, skipped: false, bfs: true, best: true, numbers: false },
     t: 0, playing: false, last: 0,
     hover: null, focus: null,
+    random: Gen.settings(), // seed, size, creeks and hills for map=random
     mode: "compare", algo: "astar", view: "2d", styleChoice: "auto", style: "terrain", fromStyle: "terrain", fadeStart: 0, fadeMs: THEME_FADE_MS,
   };
   let R = null, terrain = null, terrainKey = "", labels = [], view = null, lastHash = "";
-  let camKey = "", camMoved = 0; // when the camera last moved, for the lighter 3D surface
+  let camKey = "", moving = false, settle = 0; // whether the camera is moving, for the lighter 3D surface
   let queueCache = { R: null, algo: "", k: -1, counts: null }, stepShown = "";
 
   const rows = () => S.grid.length, cols = () => S.grid[0].length;
@@ -132,13 +133,40 @@
   }
   const mapLabels = () => creekLabel().concat(S.view === "3d" ? hillLabel() : []);
 
+  // A bundled map, or map=random: generated from the seed, which may move on
+  // to a later seed if this one leaves the pins unconnected.
   function loadMap(name, keep = {}) {
-    S.map = MAPS[name] ? name : "detour";
-    S.base = PF.parseMap(window.PATHFINDER_MAPS[S.map]);
+    S.map = MAPS[name] || name === "random" ? name : "detour";
+    if (S.map === "random") {
+      S.base = Gen.generate(S.random);
+      S.random = Gen.settings(S.base);
+    } else S.base = PF.parseMap(window.PATHFINDER_MAPS[S.map]);
     S.grid = keep.grid || S.base.grid.map((row) => row.slice());
     S.start = keep.start || S.base.start.slice();
     S.end = keep.end || S.base.end.slice();
     $("map").value = S.map;
+    renderRandom();
+  }
+
+  function renderRandom() {
+    const on = S.map === "random", r = S.random;
+    $("randomRow").hidden = !on;
+    $("map").querySelector('[value="random"]').textContent = on ? `Random, ${r.size} by ${r.size}` : "Random map";
+    if (!on) return;
+    $("rSize").value = r.size;
+    $("rCreeks").value = r.creeks;
+    $("rHills").value = r.hills;
+    $("rSeed").textContent = `seed ${r.seed}`;
+  }
+
+  // A new seed from the browser's crypto source; the map itself only uses the seeded generator.
+  function shuffle() {
+    S.random.seed = crypto.getRandomValues(new Uint32Array(1))[0];
+    loadMap("random");
+    S.tool = "start";
+    S.note = "";
+    refresh("replay");
+    fitBoard(false);
   }
 
   const edited = () => S.grid.some((row, r) => row.some((v, c) => v !== S.base.grid[r][c]));
@@ -161,8 +189,9 @@
     S.mode = p.get("mode") === "step" ? "step" : "compare";
     S.algo = Runs.ALGOS.includes(p.get("algo")) ? p.get("algo") : "astar";
     S.styleChoice = T.STYLES[p.get("style")] ? p.get("style") : "auto";
-    const name = MAPS[p.get("map")] ? p.get("map") : "detour";
-    const base = PF.parseMap(window.PATHFINDER_MAPS[name]);
+    const name = MAPS[p.get("map")] || p.get("map") === "random" ? p.get("map") : "detour";
+    if (name === "random") S.random = Gen.settings({ seed: p.get("seed"), size: p.get("size"), creeks: p.get("creeks"), hills: p.get("hills") });
+    const base = name === "random" ? Gen.generate(S.random) : PF.parseMap(window.PATHFINDER_MAPS[name]);
     const grid = decodeGrid(p.get("g"), base) || base.grid.map((row) => row.slice());
     let start = decodePin(p.get("s"), grid), end = decodePin(p.get("e"), grid);
     if (!start || !end || same(start, end)) start = end = null;
@@ -181,6 +210,10 @@
     p.set("e", S.end.join("-"));
     if (edited()) p.set("g", encodeGrid());
     else p.delete("g");
+    for (const k of ["seed", "size", "creeks", "hills"]) {
+      if (S.map === "random") p.set(k, S.random[k]);
+      else p.delete(k);
+    }
     lastHash = "#" + p;
     if (lastHash !== location.hash) history.replaceState(null, "", lastHash);
   }
@@ -303,15 +336,21 @@
       S.focus = f;
       renderTip();
     }
-    // While the camera moves, Grid 3D draws a lighter surface; one more frame
-    // after it settles brings back the full detail.
+    // While the camera moves, Grid 3D draws a lighter surface. 150 ms after the
+    // last move, a timer draws the full detail again.
     const ck = [view.cam.th, view.cam.tilt, view.cam.k, view.cam.cx, view.cam.cy].join();
-    if (ck !== camKey) (camKey = ck), (camMoved = now);
-    const moving = view.cam.tilt > 1e-3 && now - camMoved < 150;
-    if (moving) busy = true;
+    if (ck !== camKey) {
+      camKey = ck;
+      moving = true;
+      clearTimeout(settle);
+      settle = setTimeout(() => {
+        moving = false;
+        view.kick();
+      }, 150);
+    }
     const after = S.t - tm.searchEnd;
     Board.draw(view, {
-      moving,
+      moving: moving && view.cam.tilt > 1e-3,
       terrain, grid: S.grid, R, labels, start: S.start, end: S.end,
       k: stepAt(S.t), kf: Math.min(tm.N, S.t / tm.stepMs), rise: !reduce, routeFrac: clamp01(after / DRAW_MS), walkFrac: clamp01((after - DRAW_MS) / WALK_MS),
       style: S.style, fromStyle: S.fromStyle, fade,
@@ -489,7 +528,9 @@
     $("callout").hidden = !R.astar.path;
     $("callout").innerHTML = fewer > 0
       ? `<p class="big mono">${fmt(fewer)}</p><p class="lead">fewer nodes taken off the queue than Dijkstra</p>
-         <p class="sub">${fmt(R.skipped.length)} ${R.skipped.length === 1 ? "cell" : "cells"} Dijkstra expanded ${R.skipped.length === 1 ? "was" : "were"} never expanded by A*. Turn on Cells A* skipped to see them hatched on the map.</p>`
+         <p class="sub">${R.skipped.length
+           ? `${fmt(R.skipped.length)} ${R.skipped.length === 1 ? "cell" : "cells"} Dijkstra expanded ${R.skipped.length === 1 ? "was" : "were"} never expanded by A*. Turn on Cells A* skipped to see them hatched on the map.`
+           : "A* expanded every cell Dijkstra did. It saves by taking fewer stale copies off its queue."}</p>`
       : `<p class="big mono">0</p><p class="lead">nodes saved by A* on this board</p>
          <p class="sub">A* takes the same ${fmt(R.astar.nodes)} nodes off the queue as Dijkstra. Every route of the same length ties, so the heuristic can't rank them.</p>`;
   }
@@ -578,7 +619,19 @@
       const m = PF.parseMap(window.PATHFINDER_MAPS[name]);
       sel.add(new Option(`${label}, ${m.rows} by ${m.cols}`, name));
     }
+    sel.add(new Option("Random map", "random"));
+    $("shuffle").addEventListener("click", shuffle);
+    for (const [id, key] of [["rSize", "size"], ["rCreeks", "creeks"], ["rHills", "hills"]])
+      $(id).addEventListener("change", (e) => {
+        // same seed, new settings
+        S.random = Gen.settings(Object.assign({}, S.random, { [key]: e.target.value }));
+        loadMap("random");
+        S.note = "";
+        refresh("replay");
+        fitBoard(false);
+      });
     sel.addEventListener("change", () => {
+      if (sel.value === "random") return shuffle();
       loadMap(sel.value);
       S.tool = "start";
       S.note = "";
@@ -686,7 +739,7 @@
     // view or style keeps the run and the timeline.
     addEventListener("hashchange", () => {
       if (location.hash === lastHash) return;
-      const runKey = () => [S.map, S.start, S.end, encodeGrid()].join("|");
+      const runKey = () => [S.map, S.start, S.end, rows(), encodeGrid()].join("|");
       const before = runKey(), viewBefore = S.view;
       readHash();
       if (runKey() !== before) {
