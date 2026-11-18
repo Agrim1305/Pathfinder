@@ -53,8 +53,12 @@ bumped on every change, so a browser never mixes a cached old file with a new on
 - **Page controls, `ui.js`.** A search box with a list that follows the ARIA combobox
   pattern (arrows move through the matches, Enter picks, Escape puts the chosen value
   back), popovers that close on Escape or a click elsewhere, "?" toggletips whose bubble is
-  a live region, and the timeline bar (play or pause, a scrubber and "Step k of N"). The
-  page owns the clock; the bar only shows it and reports clicks.
+  a live region, and the timeline bar both pages use: step back, play or pause, step
+  forward, a scrubber, the position in the page's own words ("314 junctions checked",
+  "Step 40 of 137") and a speed from 0.25x to 4x, kept in the URL hash as `speed=`. Space
+  plays and pauses, and Left and Right step one (ten with Shift), anywhere but a text box
+  or the map, whose arrow keys move it. The page owns the clock; the bar only shows it and
+  reports clicks and keys.
 - **`scroll.js`** marks rows that scroll sideways on narrow screens, so CSS can fade out the
   edge with more to see.
 
@@ -225,7 +229,11 @@ scrolls on its own; the page itself never scrolls. The panel has three numbered 
 The replay takes about 7 seconds whatever the junction counts: the three searches race at
 one junction per step for 4.5 s (at most 40 ms a step), each route draws in 0.9 s once its
 own search finishes, then a marker walks the shortest route. Steps advance with elapsed
-time, not one per frame, so A\* visibly finishes first. A first visit shows a welcome card
+time, not one per frame, so A\* visibly finishes first; the speed control scales that clock.
+While paused or stepping during the race, a chip on the map names the junction the search
+in focus (or the first still going) checked last, rings it, and gives its walking distance
+from the start. That distance comes from running the same search to that junction, so
+`graph.js` is unchanged. A first visit shows a welcome card
 (remembered in localStorage); "Start with an example" plays the example walk and outlines
 each step for 1.5 s, except under reduced motion. `tools/check_layout.js` checks the fit
 in headless Chrome at 1440 x 900 and 1920 x 1080, in both themes, on a first and a return

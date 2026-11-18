@@ -28,6 +28,7 @@
   const FOCUS_MS = 220; // fade between focus states
   const TOUR_MS = 1500; // each step of the "Start with an example" tour
   const clamp01 = (x) => Math.max(0, Math.min(1, x));
+  const NAME = { A: 'A*', U: 'Dijkstra', B: 'BFS' }, SEARCH = { A: 'astar', U: 'ucs', B: 'bfs' };
 
   class MapApp {
     constructor(raw) {
@@ -64,6 +65,8 @@
       this.hover = null; this.kbd = null; this.pinned = null; this.focus = null; // which search the map shows
       this.alpha = this.alphas(); this.fade = null;
       this.t = 0; this.playing = false; this.last = 0; this.shownK = -1;
+      this.speed = 1; // the timeline's speed control; 1 plays the race in about 7 s
+      this.now = null; this.nowKey = ''; // the junction being checked while paused
       this.widths = new Map(); // label widths, measured once per font and text
       // Map colours follow the page theme, fading over 300 ms (at once under reduced motion).
       const P = AdelaidePalette.PALETTES;
@@ -189,13 +192,18 @@
     seek(k) {
       const tm = this.res.tm;
       this.playing = false;
-      this.t = k >= tm.N ? tm.total : k * tm.stepMs;
+      this.t = k >= tm.N ? tm.total : Math.max(0, k) * tm.stepMs;
       this.view.kick();
+    }
+    // Step d junctions back or forward; forward from the end of the race skips to the end.
+    step(d) {
+      const tm = this.res.tm;
+      this.seek(Math.max(0, Math.min(tm.N, this.stepAt(this.t) + d)));
     }
     frame(now) {
       const tm = this.res.tm;
       if (this.playing) {
-        this.t += Math.min(100, Math.max(0, now - this.last)); // a hidden tab pauses rather than jumps
+        this.t += Math.min(100, Math.max(0, now - this.last)) * this.speed; // a hidden tab pauses rather than jumps
         this.last = now;
         if (this.t >= tm.total) { this.t = tm.total; this.playing = false; }
       }
@@ -206,7 +214,8 @@
     // The timeline bar and each card's count of junctions checked so far.
     progress() {
       const tm = this.res.tm, k = this.stepAt(this.t), state = this.playing ? 'playing' : this.t >= tm.total ? 'done' : 'paused';
-      this.timeline(k, tm.N, state, `Step ${num(k)} of ${num(tm.N)}`);
+      this.timeline(k, tm.N, state, `${num(k)} junctions checked`);
+      this.nowChip();
       if (k === this.shownK) return;
       this.shownK = k;
       for (const a of ['A', 'U', 'B']) {
@@ -214,6 +223,31 @@
         c.meta.textContent = `checked ${num(s)} junctions · found in ${Timing.formatMs(this.res.ms[a])}`;
         c.bar.style.setProperty('--p', n ? s / n : 1);
       }
+    }
+
+    // While paused or stepping during the race: the junction a search checked
+    // last, and how far it is from the start along that search's route to it.
+    // That search is the one in focus, or else the first still going.
+    checking(step) {
+      const R = this.res, tm = R.tm;
+      if (this.playing || this.picking || step <= 0 || this.t >= tm.searchEnd) return null;
+      const alg = this.focus || ['A', 'U', 'B'].find((a) => step < tm.n[a]) || 'B';
+      return { alg, v: step <= tm.n[alg] ? R[alg].order[step - 1] : -1 };
+    }
+    nowChip() {
+      const c = this.now, key = c ? c.alg + c.v + ':' + this.start + '-' + this.end : '';
+      if (key === this.nowKey) return;
+      this.nowKey = key;
+      $('nowChip').hidden = !c;
+      if (!c) return;
+      if (c.v < 0) {
+        $('nowWho').textContent = NAME[c.alg] + ' has finished';
+        $('nowWhat').textContent = 'It reached your destination after ' + num(this.res.tm.n[c.alg]) + ' junctions';
+        return;
+      }
+      const D = this.D, g = AdelaideGraph.search(D, SEARCH[c.alg], this.start, c.v).dist;
+      $('nowWho').textContent = NAME[c.alg] + ' is checking';
+      $('nowWhat').textContent = X.placeName(D, c.v, D.places) + ' · ' + X.distText(g) + ' from the start';
     }
 
     // ---------- which search the map shows ----------
@@ -312,6 +346,8 @@
       this.timeline = UI.timeline($('timeline'), {
         toggle: () => { if (this.playing) this.playing = false; else this.play(false); this.view.kick(); },
         seek: (k) => this.seek(k),
+        step: (d) => this.step(d),
+        speed: (x) => { this.speed = x; },
       });
       $('go2d').addEventListener('click', () => { this.view.set3d(false); this.ui(); });
       $('go3d').addEventListener('click', () => { this.view.set3d(true); this.ui(); });
@@ -473,6 +509,14 @@
       dots(R.U.order, C.skipped, A.uAll);
       dots(R.B.order, C.bfsExplored, A.bDots);
       dots(R.A.order, C.explored, A.aExp);
+      // the junction being checked, ringed, while paused
+      this.now = this.checking(step);
+      if (this.now && this.now.v >= 0) {
+        const v = this.now.v, X_ = PX(D.nx[v], D.ny[v]), Y_ = PY(D.nx[v], D.ny[v], lift);
+        ctx.beginPath(); ctx.arc(X_, Y_, dotR + 6, 0, 6.2832);
+        ctx.lineWidth = 5; ctx.strokeStyle = C.halo; ctx.stroke();
+        ctx.lineWidth = 2.5; ctx.strokeStyle = C.ink; ctx.stroke();
+      }
       const drawLine = (ln, color, w, frac, alpha) => {
         if (!ln || frac <= 0 || alpha < 0.01) return;
         const target = ln.L * frac;
@@ -531,7 +575,7 @@
         { x: sp[0] - 10, y: sp[1] - 10, w: 20, h: 20 },
         { x: ep[0] - 3, y: ep[1] - 36, w: 22, h: 38 },
         { x: W - 14 - tw(ATTR, F_ST), y: H - 22, w: tw(ATTR, F_ST) + 8, h: 18 },
-        ...MapLabels.controlBoxes(view.canvas, document.querySelectorAll('.map-tl > *, .map-tr > *, .map-bottom > *, .pick-chip, .welcome')),
+        ...MapLabels.controlBoxes(view.canvas, document.querySelectorAll('.map-tl > *, .map-tr > *, .map-bottom > *, .pick-chip, .now-chip, .welcome')),
       ];
       const items = [
         { txt: START, font: F_PIN, color: C.ink, candidates: [box(sp[0] + 13 + tw(START, F_PIN) / 2, sp[1], START, F_PIN, 15), box(sp[0] - 13 - tw(START, F_PIN) / 2, sp[1], START, F_PIN, 15)] },

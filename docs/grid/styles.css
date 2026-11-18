@@ -2,11 +2,11 @@
 .body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 380px;
-  gap: 20px;
+  gap: 16px;
   align-items: start;
   max-width: 1480px;
   margin: 0 auto;
-  padding: 20px 24px 28px;
+  padding: 16px;
 }
 .stage {
   min-width: 0;
@@ -22,11 +22,11 @@
 }
 
 /* ---------- map ---------- */
+/* 16 px corners; the canvas rounds itself, so nothing on the map is clipped */
 .map {
   position: relative;
   min-width: 0;
-  overflow: hidden;
-  border-radius: 18px;
+  border-radius: 16px;
   border: 1px solid var(--line);
   background: var(--surface);
   /* layer swatches follow the map style; app.js sets these */
@@ -49,6 +49,7 @@
 .map canvas {
   display: block;
   width: 100%;
+  border-radius: 15px; /* inside the 1 px border */
   touch-action: none;
   cursor: grab;
 }
@@ -159,24 +160,6 @@
 /* ---------- timeline ---------- */
 .timeline {
   gap: 10px;
-}
-.tl-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-}
-.tl-buttons {
-  display: flex;
-  gap: 8px;
-}
-.tl-buttons .primary {
-  min-width: 92px;
-}
-#scrub {
-  width: 100%;
-  accent-color: var(--ink);
 }
 .spark-head {
   display: flex;
@@ -364,7 +347,6 @@
 @media (max-width: 960px) {
   .body {
     grid-template-columns: minmax(0, 1fr);
-    padding: 12px;
   }
 }
 @media (max-width: 700px) {

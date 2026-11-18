@@ -29,14 +29,17 @@ the same length, and A\* finds that best route while expanding **59% fewer nodes
 ## Four views
 
 Every number on screen comes from a real run of the three searches. Light and dark themes
-follow your system, and the button in the header cycles System, Light and Dark.
+follow your system, and the button in the header cycles System, Light and Dark. Every view
+has the same timeline: play or pause (Space), step back or forward (the arrow keys, ten at a
+time with Shift) and a speed from 0.25x to 4x that stays in the link.
 
 **Adelaide CBD**, the front page: BFS, Dijkstra and A\* on the real walking network, in 2D
 or 3D. The map fills the window and a panel beside it walks through three steps: choose
 your walk (search for a place or street, or pick on the map), compare the routes (one card
 per search: walking time, distance, junctions checked and search time; point at a card to
 see its search on the map) and what just happened. A first visit opens with a short
-example.
+example. Pause or step during the race and a chip on the map names the junction being
+checked and how far it is from the start.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/adelaide-dark.png">

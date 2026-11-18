@@ -2,7 +2,9 @@
 // light and dark, from a fresh browser profile, on a first visit (with the
 // welcome card) and a return visit:
 //   - the page itself never scrolls, down or sideways
-//   - the map and the panel fill the window below the header, with no gaps
+//   - the panel fills the right of the window below the header, and the map
+//     sits 16 px in from the header, the window edges and the panel, with
+//     16 px corners that the canvas rounds itself (nothing clips popovers)
 //   - nothing in the panel is wider than the panel
 //   - step 1 and the first result card show without scrolling the panel
 //   - the welcome card shows on the first visit only
@@ -27,9 +29,12 @@ const CHECK = `(() => {
   const doc = document.documentElement, panel = document.getElementById("panel"), map = document.getElementById("map"), top = document.querySelector(".top");
   if (doc.scrollHeight > innerHeight || doc.scrollWidth > innerWidth) bad.push("the page scrolls: " + doc.scrollWidth + " x " + doc.scrollHeight);
   const p = r(panel), m = r(map), h = r(top);
-  if (Math.abs(m.top - h.bottom) > 1 || Math.abs(p.top - h.bottom) > 1) bad.push("a gap under the header");
-  if (m.left > 0.5 || Math.abs(m.right - p.left) > 1 || Math.abs(p.right - innerWidth) > 1) bad.push("the map and panel leave a gap across the window");
-  if (Math.abs(m.bottom - innerHeight) > 1 || Math.abs(p.bottom - innerHeight) > 1) bad.push("the map or panel stops short of the bottom");
+  const near = (a, b) => Math.abs(a - b) <= 1;
+  if (!near(p.top, h.bottom) || !near(p.right, innerWidth) || !near(p.bottom, innerHeight)) bad.push("the panel does not fill the right of the window");
+  const gaps = [m.top - h.bottom, m.left, innerHeight - m.bottom, p.left - m.right].map(Math.round);
+  if (gaps.some((g) => Math.abs(g - 16) > 1)) bad.push("the map is not 16 px in all round (top, left, bottom, right: " + gaps.join(", ") + ")");
+  const ms = getComputedStyle(map), cs = getComputedStyle(map.querySelector("canvas"));
+  if (ms.borderTopLeftRadius !== "16px" || cs.borderTopLeftRadius !== "15px" || ms.overflow !== "visible") bad.push("the map corners are not rounded on the canvas, or the map clips");
   if (panel.scrollWidth > panel.clientWidth) bad.push("something in the panel is wider than it");
   for (const sel of ["#step1", ".rc"]) if (r(document.querySelector(sel)).bottom > p.bottom) bad.push(sel + " needs the panel scrolled to see it");
   return bad;

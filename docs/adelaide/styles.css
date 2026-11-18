@@ -4,7 +4,9 @@
  *
  * From 1024 px wide the map fills the left of the window and the panel sits
  * on the right, 400 px wide, scrolling on its own; the page itself does not
- * scroll. Narrower, the map sits above the panel.
+ * scroll. Narrower, the map sits above the panel. The map sits 16 px in from
+ * the header, the window edges and the panel, with rounded corners; the
+ * canvas rounds itself, so popovers can still reach past the map's edge.
  */
 .app {
   display: flex;
@@ -18,6 +20,9 @@
   order: 1;
   position: relative;
   height: clamp(420px, 66vw, 760px);
+  margin: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
   background: var(--bg);
 }
 @media (min-width: 1024px) {
@@ -47,6 +52,10 @@
 }
 
 /* ---------- the map ---------- */
+.map canvas,
+.loading {
+  border-radius: 15px; /* inside the 1 px border */
+}
 .map canvas {
   position: absolute;
   inset: 0;
@@ -129,6 +138,31 @@
   font-size: 12px;
   font-weight: 500;
 }
+/* while paused or stepping: the junction being checked and how far it is from the start */
+.now-chip {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 200px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0;
+  padding: 7px 16px 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: center;
+}
+.now-chip small {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dim);
+}
 /* Layers, the timeline and the map buttons share the bottom edge; the map credit sits under them. */
 .map-bottom {
   position: absolute;
@@ -186,8 +220,11 @@
 }
 .timeline-bar {
   flex: 1 1 auto;
-  max-width: 620px;
+  max-width: 720px;
   margin: 0 auto;
+}
+.tl-label {
+  min-width: 23ch; /* "7,539 junctions checked" */
 }
 .ctl-stack {
   flex: none;

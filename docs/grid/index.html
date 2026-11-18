@@ -8,15 +8,15 @@
       name="description"
       content="Watch BFS, Dijkstra and A* search hilly ground for the lowest-effort route, with every number from a real run."
     />
-    <script src="../shared/theme.js?v=29"></script>
+    <script src="../shared/theme.js?v=31"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
     />
-    <link rel="stylesheet" href="../shared/theme.css?v=29" />
-    <link rel="stylesheet" href="styles.css?v=29" />
+    <link rel="stylesheet" href="../shared/theme.css?v=31" />
+    <link rel="stylesheet" href="styles.css?v=31" />
   </head>
   <body>
     <header class="top">
@@ -116,22 +116,28 @@
         <p class="help" id="help"></p>
 
         <section class="card timeline" aria-label="Timeline">
-          <div class="tl-row">
-            <div class="tl-buttons">
-              <button type="button" class="btn sq" id="toStart" aria-label="Back to the start">
-                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M3 2h2v12H3zM14 2.5v11L6 8z" /></svg>
-              </button>
-              <button type="button" class="btn sq" id="prev" aria-label="Previous step">
-                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M11 2.5v11L3 8zM12 2h2v12h-2z" /></svg>
-              </button>
-              <button type="button" class="btn primary" id="play">Replay</button>
-              <button type="button" class="btn sq" id="next" aria-label="Next step">
-                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M5 2.5v11L13 8zM2 2h2v12H2z" /></svg>
-              </button>
-            </div>
-            <span class="mono dim" id="stepLabel"></span>
+          <div class="timeline-bar" id="timeline" role="group" aria-label="Timeline">
+            <button type="button" class="btn sq tl-back" aria-label="Step back" title="Step back (Left arrow; with Shift, 10 steps)">
+              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M11 2.5v11L3 8zM12 2h2v12h-2z" /></svg>
+            </button>
+            <button type="button" class="btn sq tl-play" data-state="paused" aria-label="Play" title="Play or pause (Space)">
+              <svg class="i-play" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor" /></svg>
+              <svg class="i-pause" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5h3v11H4zM9 2.5h3v11H9z" fill="currentColor" /></svg>
+              <svg class="i-again" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10" /><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10" /></svg>
+            </button>
+            <button type="button" class="btn sq tl-fwd" aria-label="Step forward" title="Step forward (Right arrow; with Shift, 10 steps)">
+              <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M5 2.5v11L13 8zM2 2h2v12H2z" /></svg>
+            </button>
+            <input type="range" class="tl-scrub" min="0" max="1" step="1" value="0" aria-label="Search step" />
+            <span class="tl-label mono"></span>
+            <select class="tl-speed" aria-label="Playback speed" title="Playback speed">
+              <option value="0.25">0.25×</option>
+              <option value="0.5">0.5×</option>
+              <option value="1" selected>1×</option>
+              <option value="2">2×</option>
+              <option value="4">4×</option>
+            </select>
           </div>
-          <input type="range" id="scrub" min="0" max="1" step="1" value="0" aria-label="Search step" />
           <div class="spark-head compare-only">
             <span>Queue size after each step. One step takes one node off a queue.</span>
             <span id="peaks" class="peaks"></span>
@@ -187,17 +193,18 @@
       </aside>
     </div>
 
-    <script src="../pathfinder.js?v=29"></script>
-    <script src="../maps.js?v=29"></script>
-    <script src="../terrain.js?v=29"></script>
-    <script src="../shared/timing.js?v=29"></script>
-    <script src="../runs.js?v=29"></script>
-    <script src="../generate.js?v=29"></script>
-    <script src="../shared/view.js?v=29"></script>
-    <script src="../shared/labels.js?v=29"></script>
-    <script src="../shared/scroll.js?v=29"></script>
-    <script src="board.js?v=29"></script>
-    <script src="grid3d.js?v=29"></script>
-    <script src="app.js?v=29"></script>
+    <script src="../pathfinder.js?v=31"></script>
+    <script src="../maps.js?v=31"></script>
+    <script src="../terrain.js?v=31"></script>
+    <script src="../shared/timing.js?v=31"></script>
+    <script src="../runs.js?v=31"></script>
+    <script src="../generate.js?v=31"></script>
+    <script src="../shared/view.js?v=31"></script>
+    <script src="../shared/labels.js?v=31"></script>
+    <script src="../shared/scroll.js?v=31"></script>
+    <script src="../shared/ui.js?v=31"></script>
+    <script src="board.js?v=31"></script>
+    <script src="grid3d.js?v=31"></script>
+    <script src="app.js?v=31"></script>
   </body>
 </html>

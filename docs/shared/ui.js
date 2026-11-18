@@ -159,14 +159,61 @@
   });
   document.addEventListener("scroll", () => owner && hideTip(), true);
 
-  // ---------- timeline: play or pause, a scrubber and "Step k of N" ----------
-  // root holds .tl-play, .tl-scrub and .tl-label. o.toggle() plays or pauses;
-  // o.seek(k) jumps to step k. Returns render(k, N, state, text), where
-  // state is "playing", "paused" or "done".
+  // ---------- one value in the URL hash, leaving the others alone ----------
+  const hashGet = (key) => new URLSearchParams(location.hash.slice(1)).get(key);
+  function hashSet(key, value) {
+    const p = new URLSearchParams(location.hash.slice(1));
+    if (value == null) p.delete(key);
+    else p.set(key, value);
+    const h = p.toString();
+    history.replaceState(null, "", h ? "#" + h : location.pathname + location.search);
+  }
+
+  // ---------- timeline: step back, play or pause, step forward, a scrubber, the position and the speed ----------
+  // root holds .tl-back, .tl-play, .tl-fwd, .tl-scrub, .tl-label and .tl-speed.
+  // The page owns the clock: o.toggle() plays or pauses, o.step(d) moves d
+  // steps (1 or 10, back or forward), o.seek(k) jumps to step k and
+  // o.speed(x) sets how fast it plays (1 is the page's normal pace). The speed
+  // is kept in the URL hash as speed=. Keys, anywhere but a text box or the
+  // map: Space plays and pauses, Left and Right step one, with Shift ten.
+  // Returns render(k, N, state, text), where state is "playing", "paused" or
+  // "done" and text says what the position means.
+  const SPEEDS = [0.25, 0.5, 1, 2, 4];
   function timeline(root, o) {
-    const play = root.querySelector(".tl-play"), scrub = root.querySelector(".tl-scrub"), label = root.querySelector(".tl-label");
+    const q = (c) => root.querySelector(c);
+    const play = q(".tl-play"), back = q(".tl-back"), fwd = q(".tl-fwd"), scrub = q(".tl-scrub"), label = q(".tl-label"), speed = q(".tl-speed");
+    // aria-disabled rather than disabled, so a button keeps focus at either end
+    const live = (b) => b.getAttribute("aria-disabled") !== "true";
     play.addEventListener("click", () => o.toggle());
+    back.addEventListener("click", (e) => live(back) && o.step(e.shiftKey ? -10 : -1));
+    fwd.addEventListener("click", (e) => live(fwd) && o.step(e.shiftKey ? 10 : 1));
     scrub.addEventListener("input", () => o.seek(Number(scrub.value)));
+    const setSpeed = (x, save) => {
+      speed.value = String(x);
+      o.speed(x);
+      if (save) hashSet("speed", x === 1 ? null : x);
+    };
+    const fromHash = () => {
+      const x = Number(hashGet("speed") || 1);
+      setSpeed(SPEEDS.includes(x) ? x : 1, false);
+    };
+    fromHash();
+    addEventListener("hashchange", fromHash); // a pasted link with another speed
+    speed.addEventListener("change", () => setSpeed(Number(speed.value), true));
+    document.addEventListener("keydown", (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
+      const t = e.target, tag = t.tagName, type = tag === "INPUT" ? t.type : "";
+      // text boxes, lists and the map (whose arrow keys move it) keep their keys
+      if (t.isContentEditable || tag === "TEXTAREA" || tag === "SELECT" || tag === "CANVAS" || (type && type !== "range" && type !== "checkbox")) return;
+      if (e.key === " ") {
+        if (tag === "BUTTON" || tag === "A" || tag === "SUMMARY" || type === "checkbox") return; // Space presses those
+        e.preventDefault();
+        o.toggle();
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        o.step((e.key === "ArrowRight" ? 1 : -1) * (e.shiftKey ? 10 : 1));
+      }
+    });
     let shown = "";
     return (k, N, state, text) => {
       const key = [k, N, state, text].join("|");
@@ -178,8 +225,10 @@
       label.textContent = text;
       play.dataset.state = state;
       play.setAttribute("aria-label", state === "playing" ? "Pause" : state === "done" ? "Play again" : "Play");
+      back.setAttribute("aria-disabled", String(k <= 0));
+      fwd.setAttribute("aria-disabled", String(state === "done"));
     };
   }
 
-  window.UI = { combobox, popover, timeline };
+  window.UI = { combobox, popover, timeline, hashGet, hashSet };
 })();

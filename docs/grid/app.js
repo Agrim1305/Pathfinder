@@ -40,12 +40,12 @@
   const S = {
     map: "detour", base: null, grid: null, start: null, end: null, tool: "start", note: "",
     layers: { explored: true, skipped: false, bfs: true, best: true, numbers: false },
-    t: 0, playing: false, last: 0,
+    t: 0, playing: false, last: 0, speed: 1, // speed: the timeline's control, 1 is the normal pace
     hover: null, focus: null,
     random: Gen.settings(), // seed, size, creeks and hills for map=random
     mode: "compare", algo: "astar", view: "2d", styleChoice: "auto", style: "terrain", fromStyle: "terrain", fadeStart: 0, fadeMs: THEME_FADE_MS,
   };
-  let R = null, terrain = null, terrainKey = "", labels = [], view = null, lastHash = "";
+  let R = null, terrain = null, terrainKey = "", labels = [], view = null, lastHash = "", tl = null;
   let camKey = "", moving = false, settle = 0; // whether the camera is moving, for the lighter 3D surface
   let queueCache = { R: null, algo: "", k: -1, counts: null }, stepShown = "";
 
@@ -316,7 +316,7 @@
     const tm = timing();
     if (S.playing) {
       // a frame's timestamp can be a little older than the moment Play was pressed
-      S.t = Math.min(tm.total, S.t + Math.max(0, now - S.last));
+      S.t = Math.min(tm.total, S.t + Math.max(0, now - S.last) * S.speed);
       S.last = now;
       if (S.t >= tm.total) S.playing = false;
       busy = S.playing;
@@ -546,19 +546,8 @@
   }
 
   function renderTimeline() {
-    const tm = timing(), k = stepAt(S.t), scrub = $("scrub");
-    scrub.max = tm.N;
-    scrub.value = k;
-    const after = S.t - tm.searchEnd;
-    // The timeline is as long as the longest search; say which one that is.
-    const longest = Runs.ALGOS.filter((a) => R[a].nodes === tm.N).map((a) => R[a].name).join(" and ");
-    const of = `Step ${fmt(k)} of ${fmt(tm.N)} (longest search: ${longest})`;
-    $("stepLabel").textContent = of +
-      (after > 0 && after < DRAW_MS ? ". Drawing the routes." : after >= DRAW_MS && S.t < tm.total ? ". Walking the best route." : "");
-    scrub.setAttribute("aria-valuetext", of);
-    $("play").textContent = S.playing ? "Pause" : S.t >= tm.total ? "Replay" : "Play";
-    $("prev").disabled = $("toStart").disabled = S.t <= 0;
-    $("next").disabled = S.t >= tm.total;
+    const tm = timing(), k = stepAt(S.t);
+    tl(k, tm.N, S.playing ? "playing" : S.t >= tm.total ? "done" : "paused", `Step ${fmt(k)} of ${fmt(tm.N)}`);
     if (S.mode === "step") renderStep(k);
     const cur = $("cursor");
     if (cur) cur.setAttribute("x1", ((k / tm.N) * 600).toFixed(1)), cur.setAttribute("x2", ((k / tm.N) * 600).toFixed(1));
@@ -668,24 +657,17 @@
       S.note = moved ? "The map is back to how it started, and so are the pins." : "";
       refresh("end");
     });
-    $("play").addEventListener("click", () => (S.playing ? pause() : play()));
-    $("toStart").addEventListener("click", () => {
-      S.playing = false;
-      seek(0);
-    });
-    $("prev").addEventListener("click", () => {
-      S.playing = false;
-      const tm = timing(), k = stepAt(S.t);
-      seekStep(S.t > tm.searchEnd ? tm.N - 1 : k - 1);
-    });
-    $("next").addEventListener("click", () => {
-      S.playing = false;
-      const tm = timing(), k = stepAt(S.t);
-      seek(k >= tm.N ? tm.total : (k + 1) * tm.stepMs);
-    });
-    $("scrub").addEventListener("input", (e) => {
-      S.playing = false;
-      seekStep(Number(e.target.value));
+    tl = UI.timeline($("timeline"), {
+      toggle: () => (S.playing ? pause() : play()),
+      step: (d) => {
+        S.playing = false;
+        seekStep(Math.max(0, Math.min(timing().N, stepAt(S.t) + d)));
+      },
+      seek: (k) => {
+        S.playing = false;
+        seekStep(k);
+      },
+      speed: (x) => (S.speed = x),
     });
     document.querySelectorAll("[data-nav]").forEach((b) => b.addEventListener("click", () => setNav(b.dataset.nav)));
     document.querySelectorAll("[data-cam]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.cam, false)));
