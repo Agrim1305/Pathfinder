@@ -61,6 +61,7 @@
         draw: (now) => { const el = this.reduce ? 1e9 : now - this.t0; this.draw(el); return el < this.timeline().end + 50 || this.pal.t0 > 0; },
         pick: (X, Y) => this.pick(X, Y),
       });
+      this.view.bindButtons(document.querySelector('.overlay-zoom'));
       this.fit(true);
       this.restart();
       this.ui();
@@ -85,8 +86,6 @@
       $('go2d').addEventListener('click', () => { this.view.set3d(false); this.ui(); });
       $('go3d').addEventListener('click', () => { this.view.set3d(true); this.ui(); });
       $('replay').addEventListener('click', () => this.restart());
-      $('zin').addEventListener('click', () => this.view.zoomAt(this.view.W / 2, this.view.H / 2, 1.3));
-      $('zout').addEventListener('click', () => this.view.zoomAt(this.view.W / 2, this.view.H / 2, 1 / 1.3));
       $('fit').addEventListener('click', () => this.fit(false));
       $('pStart').addEventListener('click', () => this.setState({ place: 'start', note: '' }));
       $('pEnd').addEventListener('click', () => this.setState({ place: 'end', note: '' }));
@@ -101,6 +100,8 @@
       $('go3d').setAttribute('aria-pressed', String(this.view.mode3d)); $('go2d').setAttribute('aria-pressed', String(!this.view.mode3d));
       const ps = s.place === 'start';
       $('pStart').setAttribute('aria-pressed', String(ps)); $('pEnd').setAttribute('aria-pressed', String(!ps));
+      // turning and tilting are 3D only
+      $('help').textContent = this.view.mode3d ? 'Drag to move the map. Right-drag or Ctrl and drag to turn and tilt it. Scroll or pinch to zoom.' : 'Drag to move the map. Scroll or pinch to zoom.';
       const nm = (n) => D.nodeName[n] || 'a footpath';
       $('hint').textContent = s.note || ('Start on ' + nm(s.start) + '. Flag on ' + nm(s.end) + '. Click the map to move the ' + (ps ? 'start.' : 'flag.'));
       const n = (x) => Math.round(x).toLocaleString('en-AU');

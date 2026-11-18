@@ -150,6 +150,11 @@
   font-size: 13.5px;
   font-weight: 500;
 }
+.help {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dim);
+}
 
 /* ---------- timeline ---------- */
 .timeline {

@@ -49,7 +49,8 @@ pins, dig or fill the creek, and pick a bundled map or shuffle a random one from
 </picture>
 
 **Grid 3D**: the same run and timeline on a lit terrain model, here in the Topo map style.
-Drag to turn it; the map style picker offers Terrain, Topo, Clay and Night.
+Drag to move it, right-drag or Ctrl and drag to turn and tilt it, or use the compass and the
+turn and tilt buttons. The map style picker offers Terrain, Topo, Clay and Night.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/grid-3d-dark.png">

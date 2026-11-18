@@ -32,9 +32,9 @@
   const HINTS = {
     start: "Click a dry cell to move the start, or drag a pin.",
     end: "Click a dry cell to move the flag, or drag a pin.",
-    creek: "Click or drag to add creek, or to dry it out. Shift and drag to move the map.",
-    raise: "Click or drag to raise the ground by 1. Shift and drag to move the map.",
-    lower: "Click or drag to lower the ground by 1. Shift and drag to move the map.",
+    creek: "Click or drag to add creek, or to dry it out. Right-drag to move the map.",
+    raise: "Click or drag to raise the ground by 1. Right-drag to move the map.",
+    lower: "Click or drag to lower the ground by 1. Right-drag to move the map.",
   };
 
   const S = {
@@ -493,7 +493,6 @@
     if (v === "3d" && PAINT.includes(S.tool)) S.tool = "start";
     document.querySelectorAll("[data-cam]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.cam === v)));
     if (S.mode === "compare") document.querySelectorAll("[data-nav]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.nav === v)));
-    view.spin = 0;
     view.mode3d = v === "3d";
     fitBoard(instant);
     labels = mapLabels();
@@ -571,7 +570,9 @@
       b.hidden = S.view === "3d" && PAINT.includes(b.dataset.tool);
     });
     document.querySelectorAll("[data-layer]").forEach((b) => b.setAttribute("aria-pressed", String(S.layers[b.dataset.layer])));
-    $("hint").textContent = S.note || HINTS[S.tool] + (S.view === "3d" ? " Drag to turn the map, Shift and drag to slide it." : "");
+    $("hint").textContent = S.note || HINTS[S.tool];
+    // turning and tilting are 3D only
+    $("help").textContent = S.view === "3d" ? "Drag to move the map. Right-drag or Ctrl and drag to turn and tilt it. Scroll or pinch to zoom." : "Drag to move the map. Scroll or pinch to zoom.";
     $("resetMap").hidden = !edited();
   }
 
@@ -708,8 +709,6 @@
         $("styleBtn").focus();
       }
     });
-    $("zin").addEventListener("click", () => view.zoomAt(view.W / 2, view.H / 2, 1.3));
-    $("zout").addEventListener("click", () => view.zoomAt(view.W / 2, view.H / 2, 1 / 1.3));
     $("fit").addEventListener("click", () => fitBoard(false));
 
     const cv = $("cv");
@@ -769,6 +768,7 @@
     // leave room for the layer chips across the top
     fit: { fill: [0.92, 0.84], minSpan: 1, kRange: [2, 400], nudge: 24 },
   });
+  view.bindButtons($("mapbox").querySelector(".overlay-zoom"));
   setStyle(styleFor(PathfinderTheme.current()), 0);
   PathfinderTheme.onChange((theme, fade) => setStyle(styleFor(theme), fade ? THEME_FADE_MS : 0));
   fitBoard(true);

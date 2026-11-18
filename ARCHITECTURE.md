@@ -24,12 +24,22 @@ bumped on every change, so a browser never mixes a cached old file with a new on
 - **Camera, `view.js`.** Both maps use one camera, `{ th, tilt, k, cx, cy }`: turn, tilt (0
   is flat with north up), pixels per world unit and the world point at the centre. `P(x, y,
   z)` projects a world point to the canvas and `unP(X, Y)` takes a canvas pixel back to the
-  ground. It handles dragging (turn in 3D, slide in 2D or with Shift), wheel and two-finger
-  pinch zoom around the pointer, arrow keys and + and -, a little turning momentum, 650 ms
-  ease-out tweens between 2D and 3D, framing a set of points, and HiDPI sizing with a
-  ResizeObserver. Its animation loop only runs while something moves. A page can take over a
-  press with `grab()`, which the grid uses for dragging pins and painting cells.
-  `tests/test_view.js` checks the maths in Node.
+  ground. Input follows the usual map conventions. A drag moves the map: on pointerdown it
+  finds the ground point under the pointer with `unP`, and on every move it solves for the
+  camera centre that puts that point back under the pointer, so it holds exactly at any turn
+  and tilt. Right-drag, or Ctrl or Cmd and drag, turns and tilts (3D only; 2D stays north
+  up). Two fingers pinch to zoom and twist to turn around their midpoint, or tilt when they
+  first move up or down together. The wheel and trackpad pinch zoom around the pointer, and
+  Safari's trackpad rotation turns the map. Arrow keys move it, and Shift with the arrows
+  turns and tilts. After a drag the map glides: the release speed is projected forward as if
+  it slowed by 0.998 each millisecond, and an ease-out over about 1.5 s starts at that speed
+  and lands there (capped, and off under reduced motion). `bindButtons()` wires the zoom,
+  turn and tilt buttons and a compass that shows the heading and resets north up. It also
+  tweens between 2D and 3D over 650 ms, frames a set of points, and sizes the canvas for
+  HiDPI with a ResizeObserver. Its animation loop only runs while something moves. A page
+  can take over a press with `grab()`, which the grid uses for dragging pins and painting
+  cells. `tests/test_view.js` checks the maths, including that a grabbed point stays within
+  0.5 px of the pointer at tilts of 0, 0.5 and 1.1.
 - **Labels, `labels.js`.** Labels are placed in priority order: pins, then landmarks, then
   streets. Each label takes its first candidate spot that overlaps no label already placed,
   no pin, no control floating over the map and no edge of the canvas; with no free spot it is

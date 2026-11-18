@@ -322,6 +322,10 @@ button {
   padding: 0;
   border-radius: 10px;
 }
+/* The compass needle turns with the map; view.js sets --heading. */
+.compass svg {
+  transform: rotate(var(--heading, 0rad));
+}
 .btn:disabled {
   opacity: 0.45;
   cursor: default;

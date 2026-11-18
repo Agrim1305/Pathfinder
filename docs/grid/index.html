@@ -8,15 +8,15 @@
       name="description"
       content="Watch BFS, Dijkstra and A* search hilly ground for the lowest-effort route, with every number from a real run."
     />
-    <script src="../shared/theme.js?v=27"></script>
+    <script src="../shared/theme.js?v=29"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
     />
-    <link rel="stylesheet" href="../shared/theme.css?v=27" />
-    <link rel="stylesheet" href="styles.css?v=27" />
+    <link rel="stylesheet" href="../shared/theme.css?v=29" />
+    <link rel="stylesheet" href="styles.css?v=29" />
   </head>
   <body>
     <header class="top">
@@ -52,7 +52,7 @@
             id="cv"
             tabindex="0"
             role="img"
-            aria-label="Map of the board: hills, the creek, the start and the flag, with what A* explored and both routes drawn on top. In Grid 3D, drag to turn it. Arrow keys move the map and the ring at its centre, Enter uses the selected tool on that cell, plus and minus zoom."
+            aria-label="Map of the board: hills, the creek, the start and the flag, with what A* explored and both routes drawn on top. Drag to move the map; in Grid 3D, right-drag to turn and tilt it. Arrow keys move the map and the ring at its centre, Shift and the arrow keys turn and tilt it in 3D, Enter uses the selected tool on that cell, plus and minus zoom."
           ></canvas>
           <div class="overlay-top">
             <div class="seg pill cam step-only" role="group" aria-label="Camera" hidden>
@@ -68,8 +68,12 @@
             </div>
           </div>
           <div class="overlay-zoom">
-            <button type="button" class="btn sq" id="zin" aria-label="Zoom in">+</button>
-            <button type="button" class="btn sq" id="zout" aria-label="Zoom out">&#8722;</button>
+            <button type="button" class="btn sq" data-act="in" aria-label="Zoom in">+</button>
+            <button type="button" class="btn sq" data-act="out" aria-label="Zoom out">&#8722;</button>
+            <button type="button" class="btn sq" data-act="left" aria-label="Rotate left"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10" /><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10" /></svg></button>
+            <button type="button" class="btn sq" data-act="right" aria-label="Rotate right"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.5 15a9 9 0 1 1-2.1-9.4L23 10" /></svg></button>
+            <button type="button" class="btn sq" data-act="tilt" aria-label="Tilt" aria-pressed="true"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 19 8 6h8l5 13z" /><path d="M5.5 12.5h13" /></svg></button>
+            <button type="button" class="btn sq compass" data-act="north" aria-label="Reset to north up"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 15.6 12H8.4z" fill="currentColor" /><path d="M12 21.5 8.4 12h7.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" /></svg></button>
             <button type="button" class="btn sq" id="fit" aria-label="Fit the board in view">
               <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" /></svg>
             </button>
@@ -109,6 +113,7 @@
           </div>
         </div>
         <p class="hint" id="hint" aria-live="polite"></p>
+        <p class="help" id="help"></p>
 
         <section class="card timeline" aria-label="Timeline">
           <div class="tl-row">
@@ -182,17 +187,17 @@
       </aside>
     </div>
 
-    <script src="../pathfinder.js?v=27"></script>
-    <script src="../maps.js?v=27"></script>
-    <script src="../terrain.js?v=27"></script>
-    <script src="../shared/timing.js?v=27"></script>
-    <script src="../runs.js?v=27"></script>
-    <script src="../generate.js?v=27"></script>
-    <script src="../shared/view.js?v=27"></script>
-    <script src="../shared/labels.js?v=27"></script>
-    <script src="../shared/scroll.js?v=27"></script>
-    <script src="board.js?v=27"></script>
-    <script src="grid3d.js?v=27"></script>
-    <script src="app.js?v=27"></script>
+    <script src="../pathfinder.js?v=29"></script>
+    <script src="../maps.js?v=29"></script>
+    <script src="../terrain.js?v=29"></script>
+    <script src="../shared/timing.js?v=29"></script>
+    <script src="../runs.js?v=29"></script>
+    <script src="../generate.js?v=29"></script>
+    <script src="../shared/view.js?v=29"></script>
+    <script src="../shared/labels.js?v=29"></script>
+    <script src="../shared/scroll.js?v=29"></script>
+    <script src="board.js?v=29"></script>
+    <script src="grid3d.js?v=29"></script>
+    <script src="app.js?v=29"></script>
   </body>
 </html>
