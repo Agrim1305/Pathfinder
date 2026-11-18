@@ -32,3 +32,5 @@ jobs:
         run: node tests/compare_js.js
       - name: Check the shared map camera
         run: node tests/test_view.js
+      - name: Check the terrain model
+        run: node tests/test_terrain.js

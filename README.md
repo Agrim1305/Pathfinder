@@ -114,11 +114,13 @@ python visualize.py
 python -m unittest discover -s tests -v
 node tests/compare_js.js
 node tests/test_view.js
+node tests/test_terrain.js
 ```
 
 13 Python tests for the grid search, 7 that check the Adelaide searches against NetworkX,
-a check (`node tests/compare_js.js`) that the browser demo matches the Python code, and a
-check of the shared map camera (`node tests/test_view.js`). GitHub
+a check (`node tests/compare_js.js`) that the browser demo matches the Python code, and
+checks of the shared map camera and the terrain model (`tests/test_view.js`,
+`tests/test_terrain.js`). GitHub
 Actions runs them all on every push. The Adelaide tests need Node and NetworkX
 (`pip install -r tools/requirements.txt`) and skip themselves without them; CI installs both
 and fails if they skip. The grid tests check that:
