@@ -95,4 +95,20 @@ for (const on of [true, false]) {
   checks++;
 }
 
+// A page can take over a press (to drag a pin, say): the map stays still and
+// the page gets the moves in canvas pixels. Other presses still move the map.
+const grabbed = [];
+view.opts.grab = (X, Y) => (X < 50 ? { move: (x, y) => grabbed.push(["move", x, y]), up: (x, y) => grabbed.push(["up", x, y]) } : null);
+const camBefore = JSON.stringify(view.cam);
+view.down(ev(5, 30, 40));
+view.move(ev(5, 90, 60));
+view.up(ev(5, 95, 60));
+assert.deepStrictEqual(grabbed, [["move", 80, 40], ["up", 85, 40]], "grab gets moves in canvas pixels");
+assert.strictEqual(JSON.stringify(view.cam), camBefore, "a grabbed press leaves the map alone");
+view.down(ev(6, 300, 40));
+view.move(ev(6, 340, 40));
+view.up(ev(6, 340, 40));
+assert.notStrictEqual(JSON.stringify(view.cam), camBefore, "other presses still move the map");
+checks++;
+
 console.log(`${checks} of ${checks} camera checks pass`);

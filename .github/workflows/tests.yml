@@ -34,3 +34,9 @@ jobs:
         run: node tests/test_view.js
       - name: Check the terrain model
         run: node tests/test_terrain.js
+      - name: Check the trace never changes a search
+        run: node tests/test_trace.js
+      - name: Check the numbers behind the grid views
+        run: node tests/test_layers.js
+      - name: Check colour contrast in both themes
+        run: node tests/test_contrast.js

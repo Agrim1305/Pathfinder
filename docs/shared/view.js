@@ -15,7 +15,11 @@
  *   draw(now)   draws one frame (the HiDPI transform is already set) and
  *               returns true if it needs another frame
  *   pick(X, Y)  a click that wasn't a drag, in canvas pixels
- * and optionally cam, mode3d, pose3d, kRange, tiltRange and fit.
+ * and optionally:
+ *   grab(X, Y, e)  return { move(X, Y), up(X, Y) } to take over a press
+ *                  (dragging a pin, painting cells) instead of moving the map
+ *   keyStep        how far arrow keys slide the map, in world units
+ *   cam, mode3d, pose3d, kRange, tiltRange and fit
  */
 (function (root) {
   "use strict";
@@ -185,11 +189,24 @@
       return { x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2, d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1 };
     }
 
+    local(e) {
+      const r = this.canvas.getBoundingClientRect();
+      return [e.clientX - r.left, e.clientY - r.top];
+    }
+
     down(e) {
+      if (this.grabbed) return;
       this.canvas.setPointerCapture(e.pointerId);
-      this.ptrs.set(e.pointerId, [e.clientX, e.clientY]);
       this.tween = null;
       this.spin = 0;
+      if (!this.ptrs.size && this.opts.grab) {
+        const g = this.opts.grab(...this.local(e), e);
+        if (g) {
+          this.grabbed = Object.assign(g, { id: e.pointerId });
+          return;
+        }
+      }
+      this.ptrs.set(e.pointerId, [e.clientX, e.clientY]);
       if (this.ptrs.size === 2) {
         // a second finger turns the drag into a pinch
         this.drag = null;
@@ -204,6 +221,10 @@
     }
 
     move(e) {
+      if (this.grabbed) {
+        if (e.pointerId === this.grabbed.id) this.grabbed.move(...this.local(e));
+        return;
+      }
       if (!this.ptrs.has(e.pointerId)) return;
       this.ptrs.set(e.pointerId, [e.clientX, e.clientY]);
       if (this.pinch) {
@@ -232,6 +253,13 @@
     }
 
     up(e) {
+      const g = this.grabbed;
+      if (g) {
+        if (e.pointerId !== g.id) return;
+        this.grabbed = null;
+        g.up(...this.local(e));
+        return;
+      }
       this.ptrs.delete(e.pointerId);
       if (this.pinch) {
         // the fingers left after a pinch neither drag nor click
@@ -258,7 +286,7 @@
 
     // Arrow keys slide the map, + and - zoom around the centre.
     key(e) {
-      const m = this.cam, step = 60 / m.k;
+      const m = this.cam, step = this.opts.keyStep || 60 / m.k;
       const dir = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
       if (dir) {
         e.preventDefault();

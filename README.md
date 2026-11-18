@@ -6,7 +6,7 @@ Finds the lowest-effort route across terrain with hills and obstacles, and shows
 choice of search algorithm matters. BFS, Dijkstra (Uniform Cost Search) and A\* are
 implemented from scratch in Python with no external dependencies.
 
-**[Try it in your browser](https://agrim1305.github.io/Pathfinder/)**: pick an algorithm, or race all three, and watch each one search the demo map. Once a route is found, a hiker walks it at a pace set by the real step cost, so climbs visibly slow it down. Every visit, and every press of "New walls", gives a fresh random wall layout on the same hilly terrain. The figures below use the fixed walls in `maps/detour.txt`, and `python benchmark.py` reproduces them. The browser version is a JavaScript copy of the same algorithms, and CI checks it gives identical results to the Python code on every map.
+**[Try it in your browser](https://agrim1305.github.io/Pathfinder/)**: BFS, Dijkstra and A\* search the same hilly map, and a timeline lets you scrub through every step. Hover any cell for its real g, h and f. Move the start and the flag, dig or fill the creek, raise or lower the ground, and all three searches run again. The page opens on `maps/detour.txt`, the map behind the figures below, and `python benchmark.py` reproduces them. The browser version is a JavaScript copy of the same algorithms, and CI checks it gives identical results to the Python code on every map. Light and dark themes follow your system, with a toggle in the header.
 
 **The short version:** counting steps is not enough. On the demo map, BFS (which only
 counts steps) walks straight over a hill and pays **35% more effort** than the best route of
@@ -112,16 +112,15 @@ python visualize.py
 
 ```bash
 python -m unittest discover -s tests -v
-node tests/compare_js.js
-node tests/test_view.js
-node tests/test_terrain.js
+for t in tests/compare_js.js tests/test_*.js; do node "$t"; done
 ```
 
 13 Python tests for the grid search, 7 that check the Adelaide searches against NetworkX,
-a check (`node tests/compare_js.js`) that the browser demo matches the Python code, and
-checks of the shared map camera and the terrain model (`tests/test_view.js`,
-`tests/test_terrain.js`). GitHub
-Actions runs them all on every push. The Adelaide tests need Node and NetworkX
+and Node checks for the browser code: `compare_js.js` (the demo matches the Python code),
+`test_trace.js` (recording a trace never changes a search), `test_layers.js` (the numbers on
+the page, such as the cells A\* skipped), `test_terrain.js`, `test_view.js` (the shared map
+camera) and `test_contrast.js` (every text and control colour meets WCAG AA in both themes).
+GitHub Actions runs them all on every push. The Adelaide tests need Node and NetworkX
 (`pip install -r tools/requirements.txt`) and skip themselves without them; CI installs both
 and fails if they skip. The grid tests check that:
 

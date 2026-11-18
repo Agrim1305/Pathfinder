@@ -1,0 +1,315 @@
+/*
+ * Shared colour tokens and header for the grid page and the Adelaide page.
+ * Light values sit on :root; dark values apply when theme.js sets
+ * data-theme="dark" on <html> (it follows the system unless you choose).
+ * tests/test_contrast.js checks these pairs against WCAG AA.
+ */
+:root {
+  --bg: #eef0ec;
+  --surface: #ffffff;
+  --seg-bg: #e3e6e0;
+  --seg-on: #ffffff;
+  --chip-off: #f3f4f1;
+  --ink: #15181d;
+  --ink-2: #3a4049;
+  --dim: #565f6a;
+  --line: #dde1da;
+  --edge: #7a828c;
+  --primary-bg: #15181d;
+  --primary-ink: #ffffff;
+  --astar: #1d4ed8;
+  --bfs: #b93c0a;
+  --dijkstra: #0f766e;
+  --focus: #1d4ed8;
+  --tip-bg: #15181d;
+  --tip-ink: #ffffff;
+  --callout-bg: #15181d;
+  --callout-ink: #ffffff;
+  --callout-dim: #c3c9d1;
+  --shadow: 0 1px 3px rgba(21, 24, 29, 0.14);
+  --font: "Geist", -apple-system, system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #0e141a;
+  --surface: #161d25;
+  --seg-bg: #0e141a;
+  --seg-on: #2b3642;
+  --chip-off: #1b232c;
+  --ink: #e8eef4;
+  --ink-2: #c3ccd6;
+  --dim: #9aa6b4;
+  --line: #26303b;
+  --edge: #6b7784;
+  --primary-bg: #e8eef4;
+  --primary-ink: #0e141a;
+  --astar: #60a5fa;
+  --bfs: #fb923c;
+  --dijkstra: #2dd4bf;
+  --focus: #60a5fa;
+  --tip-bg: #e8eef4;
+  --tip-ink: #0e141a;
+  --callout-bg: #22303d;
+  --callout-ink: #e8eef4;
+  --callout-dim: #b4c0cc;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+/* Theme switches fade for 300 ms; theme.js skips this under reduced motion. */
+html.theme-fade,
+html.theme-fade *,
+html.theme-fade *::before,
+html.theme-fade *::after {
+  transition:
+    background-color 300ms ease,
+    color 300ms ease,
+    border-color 300ms ease,
+    fill 300ms ease,
+    stroke 300ms ease !important;
+}
+
+* {
+  box-sizing: border-box;
+}
+[hidden] {
+  display: none !important;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.45 var(--font);
+}
+a {
+  color: var(--ink);
+}
+button,
+select,
+input {
+  font: inherit;
+  color: var(--ink);
+}
+button {
+  cursor: pointer;
+}
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.dim {
+  color: var(--dim);
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- shared header ---------- */
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  padding: 12px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.brand {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  text-decoration: none;
+}
+.brand b {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.brand span {
+  font-size: 12.5px;
+  color: var(--dim);
+}
+.top-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.top-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dim);
+}
+.top select {
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid var(--edge);
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Segmented control: a row of buttons or links, one of them current. */
+.seg {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 2px;
+  padding: 2px;
+  background: var(--seg-bg);
+  border-radius: 10px;
+}
+.seg > * {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.seg > [aria-current="page"],
+.seg > [aria-pressed="true"] {
+  background: var(--seg-on);
+  box-shadow: var(--shadow);
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--edge);
+  background: var(--surface);
+}
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+}
+:root[data-theme="dark"] .i-moon,
+:root:not([data-theme="dark"]) .i-sun {
+  display: none;
+}
+.gh {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Toggle pills for map layers: a filled swatch when on, hollow when off. */
+.chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  background: var(--chip-off);
+  color: var(--dim);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chip[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--ink);
+}
+.chip .sw {
+  flex: none;
+  display: inline-block;
+}
+.chip[aria-pressed="false"] .sw {
+  opacity: 0.35;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 600;
+}
+.btn.primary {
+  border-color: var(--primary-bg);
+  background: var(--primary-bg);
+  color: var(--primary-ink);
+}
+.btn.sq {
+  width: 36px;
+  padding: 0;
+  border-radius: 10px;
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.card h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+.card p {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+@media (max-width: 700px) {
+  .top {
+    padding: 10px 16px;
+  }
+  .top-controls {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .top-controls > * {
+    flex: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  button {
+    transition: transform 100ms ease-out;
+  }
+  button:active {
+    transform: scale(0.97);
+  }
+}

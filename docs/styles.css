@@ -1,0 +1,388 @@
+/* Grid page. Colours, the header, buttons and cards come from shared/theme.css. */
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 20px;
+  align-items: start;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 20px 24px 28px;
+}
+.stage {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.side {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---------- map ---------- */
+.map {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  /* layer swatches follow the map style; app.js sets these */
+  --ov-astar: #1d4ed8;
+  --ov-bfs: #c2410c;
+  --ov-best: #1d4ed8;
+  --ov-skipped: #0f766e;
+}
+/* On a dark map style the controls on the map switch to light text. */
+.map.dark-map {
+  --surface: #161d25;
+  --chip-off: #1b232c;
+  --ink: #e8eef4;
+  --dim: #9aa6b4;
+  --edge: #6b7784;
+  --tip-bg: #e8eef4;
+  --tip-ink: #0e141a;
+  color: var(--ink);
+}
+.map canvas {
+  display: block;
+  width: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+.map canvas:active {
+  cursor: grabbing;
+}
+.map canvas:focus-visible {
+  outline-offset: -3px;
+}
+.overlay-top {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 14px;
+  pointer-events: none;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chips > * {
+  pointer-events: auto;
+}
+.sw-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ov-astar);
+}
+.sw-hatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--ov-skipped);
+  background: repeating-linear-gradient(-45deg, var(--ov-skipped) 0 1.2px, transparent 1.2px 4px);
+}
+.sw-dash {
+  width: 16px;
+  height: 3px;
+  background: repeating-linear-gradient(90deg, var(--ov-bfs) 0 5px, transparent 5px 8px);
+}
+.sw-line {
+  width: 16px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--ov-best);
+}
+.sw-num {
+  font: 600 11px/1 var(--mono);
+  font-style: normal;
+}
+.overlay-zoom {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.overlay-zoom .btn {
+  font-size: 18px;
+  line-height: 1;
+}
+.tip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 260px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--tip-bg);
+  color: var(--tip-ink);
+  font-size: 12.5px;
+  pointer-events: none;
+}
+.tip b {
+  font-weight: 600;
+}
+
+/* ---------- tools and hint ---------- */
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+.tools-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.hint {
+  margin: 0;
+  min-height: 1.45em;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+/* ---------- timeline ---------- */
+.timeline {
+  gap: 10px;
+}
+.tl-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.tl-buttons {
+  display: flex;
+  gap: 8px;
+}
+.tl-buttons .primary {
+  min-width: 92px;
+}
+#scrub {
+  width: 100%;
+  accent-color: var(--ink);
+}
+.spark-head {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 12.5px;
+  color: var(--dim);
+}
+.peaks .astar {
+  color: var(--astar);
+}
+.peaks .ucs {
+  color: var(--dijkstra);
+}
+.peaks .bfs {
+  color: var(--bfs);
+}
+.spark {
+  display: block;
+  width: 100%;
+  height: 56px;
+  overflow: visible;
+}
+.spark polyline {
+  fill: none;
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+.spark .bfs {
+  stroke: var(--bfs);
+}
+.spark .ucs {
+  stroke: var(--dijkstra);
+}
+.spark .astar {
+  stroke: var(--astar);
+}
+.spark .flag {
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+.spark #cursor {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.spark-flags {
+  position: relative;
+  height: 1.4em;
+  font-size: 12px;
+  color: var(--dim);
+}
+.spark-flags span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.spark-flags span:last-child {
+  transform: translateX(-100%);
+}
+
+/* ---------- side ---------- */
+.side h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.results {
+  gap: 0;
+  padding: 10px 18px;
+}
+.res-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px 48px;
+  gap: 8px;
+  padding: 6px 0 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dim);
+}
+.res-head span + span {
+  text-align: right;
+}
+.res-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px 48px;
+  gap: 6px 8px;
+  align-items: center;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.res-row > span.mono {
+  text-align: right;
+  font-size: 15px;
+}
+.nm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  font-weight: 600;
+}
+.k {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+.k.bfs,
+.bar .bfs {
+  background: var(--bfs);
+}
+.k.ucs,
+.bar .ucs {
+  background: var(--dijkstra);
+}
+.k.astar,
+.bar .astar {
+  background: var(--astar);
+}
+.badge {
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--edge);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+}
+.bar i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+}
+.nodes {
+  grid-column: 1 / -1;
+  font-size: 12.5px;
+  color: var(--dim);
+}
+.nodes b {
+  font-weight: 500;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.callout {
+  background: var(--callout-bg);
+  border-color: var(--callout-bg);
+  gap: 4px;
+}
+.callout[hidden] {
+  display: none;
+}
+.callout p {
+  color: var(--callout-dim);
+}
+.callout .big {
+  font-size: 40px;
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--callout-ink);
+}
+.callout .lead {
+  font-weight: 600;
+  color: var(--callout-ink);
+}
+.callout .sub {
+  font-size: 13px;
+}
+.foot {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--dim);
+}
+
+/* ---------- narrow screens ---------- */
+@media (max-width: 960px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px;
+  }
+}
+@media (max-width: 700px) {
+  .chips,
+  .tools {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .overlay-top {
+    right: 0;
+  }
+  .chips {
+    padding-right: 14px;
+  }
+  .tools > * {
+    flex: none;
+  }
+  .map canvas {
+    cursor: default;
+  }
+  /* pinch and the + and - keys zoom here; the buttons would cover the board */
+  .overlay-zoom {
+    display: none;
+  }
+}

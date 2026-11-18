@@ -105,12 +105,22 @@ function reconstructPath(cameFrom, end) {
   return path.reverse();
 }
 
+// How many queue entries each trace step keeps, front first.
+const TRACE_QUEUE = 7;
+
 /*
  * Runs one search. algorithm is "bfs", "ucs" or "astar"; hType is used by A*.
  * Returns { path, numVisits, order } where order lists every node taken off
  * the queue, in sequence (used to animate the search).
+ *
+ * Pass an array as trace to also get one entry per node taken off the queue:
+ * { node, g, f, stale, goal, pushed, skipped, frontier, queue }. pushed and
+ * skipped count the neighbours added and the ones left out as already closed,
+ * frontier is the queue size afterwards, and queue holds the next entries to
+ * come out, each { node, g, f, stale }. The trace only reads the search
+ * state, so results are identical with or without it (tests/test_trace.js).
  */
-function search(algorithm, rows, cols, start, end, grid, hType = "manhattan") {
+function search(algorithm, rows, cols, start, end, grid, hType = "manhattan", trace = null) {
   const numVisits = Array.from({ length: rows }, () => new Array(cols).fill(0));
   const order = [];
   const closed = new Set();
@@ -118,41 +128,77 @@ function search(algorithm, rows, cols, start, end, grid, hType = "manhattan") {
   const [er, ec] = end;
 
   let counter = 0;
-  let push, pop, empty;
+  let push, pop, empty, size, front;
   if (algorithm === "bfs") {
     const queue = [];
     let head = 0;
     push = (item) => queue.push(item);
     pop = () => queue[head++];
     empty = () => head >= queue.length;
+    size = () => queue.length - head;
+    front = (n) => queue.slice(head, head + n);
   } else {
     const heap = new MinHeap();
     push = (item) => heap.push(item);
     pop = () => heap.pop();
     empty = () => heap.size === 0;
+    size = () => heap.size;
+    front = (n) =>
+      heap.items
+        .slice()
+        .sort((a, b) => (heap.less(a, b) ? -1 : 1))
+        .slice(0, n);
   }
+  const note = (item, stale, goal, pushed, skipped) =>
+    trace.push({
+      node: item.node,
+      g: item.g,
+      f: item.key[0],
+      stale,
+      goal,
+      pushed,
+      skipped,
+      frontier: size(),
+      queue: front(TRACE_QUEUE).map((q) => ({
+        node: q.node,
+        g: q.g,
+        f: q.key[0],
+        stale: closed.has(key(...q.node)),
+      })),
+    });
 
   const h0 =
     algorithm === "astar" ? heuristic(start[0], start[1], er, ec, hType) : 0;
   push({ key: [h0, counter], g: 0, node: start, parent: null });
 
   while (!empty()) {
-    const { g, node, parent } = pop();
+    const item = pop();
+    const { g, node, parent } = item;
     const [r, c] = node;
     numVisits[r][c] += 1;
     order.push(node);
 
     if (r === er && c === ec) {
       cameFrom.set(key(r, c), parent);
+      if (trace) note(item, false, true, 0, 0);
       return { path: reconstructPath(cameFrom, end), numVisits, order };
     }
-    if (closed.has(key(r, c))) continue;
+    if (closed.has(key(r, c))) {
+      if (trace) note(item, true, false, 0, 0);
+      continue;
+    }
     closed.add(key(r, c));
     cameFrom.set(key(r, c), parent);
 
+    let pushed = 0,
+      skipped = 0;
     for (const [nr, nc] of getNeighbours(r, c, rows, cols, grid)) {
-      if (closed.has(key(nr, nc))) continue;
+      if (closed.has(key(nr, nc))) {
+        skipped++;
+        continue;
+      }
       counter += 1;
+      pushed++;
       if (algorithm === "bfs") {
         push({ key: [0, counter], g: 0, node: [nr, nc], parent: node });
       } else {
@@ -162,6 +208,7 @@ function search(algorithm, rows, cols, start, end, grid, hType = "manhattan") {
         push({ key: [f, counter], g: ng, node: [nr, nc], parent: node });
       }
     }
+    if (trace) note(item, false, false, pushed, skipped);
   }
   return { path: null, numVisits, order };
 }
