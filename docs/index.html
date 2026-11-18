@@ -115,6 +115,17 @@
         margin: 0;
         text-wrap: balance;
       }
+      .head-row {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px 16px;
+      }
+      a.btn {
+        display: inline-block;
+        text-decoration: none;
+      }
       .lede {
         margin: 0;
         color: var(--muted);
@@ -221,6 +232,7 @@
         width: 120px;
         accent-color: var(--astar);
       }
+      a:focus-visible,
       button:focus-visible,
       select:focus-visible,
       input:focus-visible,
@@ -408,7 +420,12 @@
   <body>
     <div class="wrap app">
       <header>
-        <h1>Pathfinder Terrain Lab</h1>
+        <div class="head-row">
+          <h1>Pathfinder Terrain Lab</h1>
+          <nav aria-label="Other views">
+            <a class="btn" href="adelaide/">Adelaide CBD</a>
+          </nav>
+        </div>
         <p class="lede">
           Pick an algorithm and press Run. Once it finds a route to the flag,
           the hiker walks it, slowing on every climb: each step costs

@@ -34,3 +34,5 @@ Thumbs.db
 venv/
 ENV/
 env/
+# Raw OpenStreetMap download from tools/fetch_adelaide.py (about 9 MB)
+data/adelaide_raw.json

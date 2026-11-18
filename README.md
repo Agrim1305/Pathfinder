@@ -51,6 +51,40 @@ What the numbers show:
   of the same length ties.
 - **UCS and A\* always agree on the best cost**, which the tests check on every map.
 
+## Real city: Adelaide CBD
+
+**[Open the Adelaide demo](https://agrim1305.github.io/Pathfinder/adelaide/)**
+
+![Adelaide CBD in 3D: the BFS route (orange) uses fewer street segments but walks 484 m further than the shortest route (blue)](docs/screenshots/adelaide.png)
+
+BFS, Dijkstra and A\* also run on the real walking network of Adelaide's city centre: 7,539
+junctions and 11,602 street and path segments from OpenStreetMap, with 4,799 buildings
+drawn in 2D or 3D. Click the map to move the start or the flag, and all three searches run again.
+
+- Tests check all three against NetworkX on 300 random walks. Dijkstra and A\* match the
+  shortest distance exactly, and BFS matches the fewest-segment count. Across those walks
+  A\* expands a median of 23% as many junctions as Dijkstra.
+- A regression test covers a real bug. Edge lengths were measured on unrounded points while
+  the A\* heuristic used rounded ones, so the straight-line estimate could exceed an edge by
+  up to 0.7 m. That broke consistency and returned routes up to 0.4 m too long. Lengths are
+  now measured on the stored points.
+- To rebuild the data, install the tools' requirements (Shapely and NetworkX), then download
+  and prepare it. [ARCHITECTURE.md](ARCHITECTURE.md) explains each step.
+
+  ```bash
+  pip install -r tools/requirements.txt
+  python tools/fetch_adelaide.py && python tools/prep_adelaide.py
+  ```
+
+- To run it locally, serve `docs/` and open http://localhost:8000/adelaide/. The page loads
+  its data over HTTP, so opening the file directly doesn't work.
+
+  ```bash
+  cd docs && python -m http.server 8000
+  ```
+
+Map data © OpenStreetMap contributors, ODbL.
+
 ## Quick start
 
 Requires Python 3.10 or newer. No packages to install.
@@ -78,9 +112,14 @@ python visualize.py
 
 ```bash
 python -m unittest discover -s tests -v
+node tests/compare_js.js
 ```
 
-13 Python tests, plus a check (`node tests/compare_js.js`) that the browser demo matches the Python code, all run automatically on every push by GitHub Actions. The Python tests check that:
+13 Python tests for the grid search, 7 that check the Adelaide searches against NetworkX,
+and a check (`node tests/compare_js.js`) that the browser demo matches the Python code. GitHub
+Actions runs them all on every push. The Adelaide tests need Node and NetworkX
+(`pip install -r tools/requirements.txt`) and skip themselves without them; CI installs both
+and fails if they skip. The grid tests check that:
 
 - every algorithm returns a legal path (adjacent steps, no obstacles, no repeated cells)
   on every map, with both A\* heuristics
@@ -123,10 +162,13 @@ pathfinder.py        search algorithms, cost model and command-line interface
 benchmark.py         compares every algorithm on every map
 visualize.py         draws the README images (needs matplotlib)
 docs/                browser demo (index.html, pathfinder.js) and README images
+docs/adelaide/       Adelaide CBD demo: graph.js (searches), map.js (2D and 3D map), data
 example.py           using the module from Python
 generate_maps.py     builds the test maps
 maps/                six maps, from a 5×5 demo to a 20×20 random terrain, plus the browser demo map
-tests/               unit tests
+tests/               unit tests, the browser check and the NetworkX check
+tools/               downloads and prepares the Adelaide OpenStreetMap data
+ARCHITECTURE.md      how the pieces fit together
 ```
 
 ## Author

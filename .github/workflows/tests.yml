@@ -16,12 +16,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Run tests
-        run: python -m unittest discover -s tests -v
-      - name: Run benchmark
-        run: python benchmark.py
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Install NetworkX and Shapely for the Adelaide checks
+        run: pip install -r tools/requirements.txt
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+      - name: Check the Adelaide searches against NetworkX (must not skip)
+        # A skipped run ends "OK (skipped=7)", so a bare "OK" proves all 7 tests ran.
+        run: python -m unittest tests.test_adelaide_routes -v 2>&1 | tee /dev/stderr | grep -qx OK
+      - name: Run benchmark
+        run: python benchmark.py
       - name: Check the browser demo matches the Python code
         run: node tests/compare_js.js

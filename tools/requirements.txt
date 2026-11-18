@@ -1,0 +1,4 @@
+# Only needed to rebuild the Adelaide data and run its NetworkX tests.
+# The search code itself needs nothing beyond the Python standard library.
+networkx>=3.0
+shapely>=2.0
