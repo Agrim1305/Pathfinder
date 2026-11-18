@@ -142,7 +142,7 @@
       ctx.globalAlpha = 1;
     }
     // Cells A* skipped: Dijkstra has taken them off its queue by now, A* never does.
-    if (s.layers.skipped && R.skipped.length) {
+    if (!s.step && s.layers.skipped && R.skipped.length) {
       const kU = kOf("ucs"), close = R.ucs.closeStep;
       ctx.save();
       ctx.beginPath();
@@ -173,12 +173,29 @@
       ctx.restore();
     }
 
-    // A* explored: a disc on every cell A* has taken off its queue so far. Discs
-    // lie on the ground (flattened when the camera tilts) and rise in quickly as
-    // they are reached, unless motion is reduced.
-    const A = R.astar, kA = kOf("astar"), dot = Math.max(2, Math.min(6, cellPx * 0.11));
+    // Explored: a disc on every cell the search has taken off its queue so far
+    // (A* in Compare, the chosen algorithm in Step through). Discs lie on the
+    // ground (flattened when the camera tilts) and rise in quickly as they are
+    // reached, unless motion is reduced.
+    const OV = { bfs: "bfs", ucs: "skipped", astar: "astar" }; // overlay colour for each algorithm
+    const A = s.step ? R[s.step.algo] : R.astar, kA = kOf(A.algo), runCol = col(OV[A.algo]);
+    const dot = Math.max(2, Math.min(6, cellPx * 0.11));
     const flat = Math.max(0.5, Math.cos(view.cam.tilt)), RISE = 2.5;
-    if (s.layers.explored && kA > 0) {
+    // Step through also rings every cell still waiting in the queue.
+    if (s.step) {
+      const q = s.step.queue, rr = dot * 1.7;
+      ctx.beginPath();
+      for (let k = 0; k < q.length; k++) {
+        if (q[k] <= 0 || (A.closeStep[k] >= 0 && A.closeStep[k] < kA)) continue;
+        const [X, Y] = centre([Math.floor(k / cols), k % cols], 0.02);
+        ctx.moveTo(X + rr, Y);
+        ctx.ellipse(X, Y, rr, rr * flat, 0, 0, 2 * Math.PI);
+      }
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = runCol;
+      ctx.stroke();
+    }
+    if ((s.step || s.layers.explored) && kA > 0) {
       ctx.beginPath();
       for (let i = 0; i < kA; i++) {
         if (A.trace[i].stale) continue;
@@ -188,14 +205,15 @@
         ctx.moveTo(X + r, Y);
         ctx.ellipse(X, Y, r, r * flat, 0, 0, 2 * Math.PI);
       }
-      ctx.fillStyle = col("astar");
+      ctx.fillStyle = runCol;
       ctx.fill();
-      if (kA < A.nodes) {
+      if (kA < A.nodes || (s.step && kA === A.nodes && s.routeFrac === 0)) {
+        // the cell being expanded now
         const [X, Y] = centre(A.trace[kA - 1].node, 0.02), r = Math.max(7, cellPx * 0.3);
         ctx.beginPath();
         ctx.ellipse(X, Y, r, r * flat, 0, 0, 2 * Math.PI);
-        ctx.lineWidth = 2.5;
-        ctx.strokeStyle = col("astar");
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = runCol;
         ctx.stroke();
       }
     }
@@ -221,11 +239,14 @@
       ctx.stroke();
       ctx.restore();
     };
-    if (s.layers.bfs) route(R.bfs.path, s.routeFrac, col("bfs"), 3, [7, 6]);
-    if (s.layers.best) route(A.path, s.routeFrac, col("best"), 4.5);
+    if (s.step) route(A.path, s.routeFrac, runCol, 4.5);
+    else {
+      if (s.layers.bfs) route(R.bfs.path, s.routeFrac, col("bfs"), 3, [7, 6]);
+      if (s.layers.best) route(A.path, s.routeFrac, col("best"), 4.5);
+    }
 
-    // A marker walks the best route, slowing on climbs like a hiker would.
-    if (s.layers.best && A.path && s.walkFrac > 0) {
+    // A marker walks the route, slowing on climbs like a hiker would.
+    if ((s.step || s.layers.best) && A.path && s.walkFrac > 0) {
       const p = A.path, costs = [0];
       for (let i = 1; i < p.length; i++) costs.push(costs[i - 1] + root.Pathfinder.stepCost(s.grid, ...p[i - 1], ...p[i]));
       const e = s.walkFrac < 0.5 ? 2 * s.walkFrac ** 2 : 1 - (-2 * s.walkFrac + 2) ** 2 / 2;
@@ -243,7 +264,7 @@
       ctx.fillStyle = "#FFFFFF";
       ctx.fill();
       ctx.lineWidth = 3;
-      ctx.strokeStyle = col("best");
+      ctx.strokeStyle = s.step ? runCol : col("best");
       ctx.stroke();
     }
 
@@ -280,7 +301,7 @@
       { x: fx - 3, y: fy - fh - 2, w: fh * 0.6 + 6, h: fh + 6 },
       ...(s.controls || []),
     ];
-    if (s.layers.explored)
+    if (s.step || s.layers.explored)
       A.closeStep.forEach((step, k) => {
         if (step < 0) return;
         const [X, Y] = centre([Math.floor(k / cols), k % cols], 0.02);

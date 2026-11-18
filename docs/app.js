@@ -12,6 +12,23 @@
   const DRAW_MS = 1200, WALK_MS = 2400, THEME_FADE_MS = 300, STYLE_FADE_MS = 400;
   const PAINT = ["creek", "raise", "lower"]; // editing tools, Grid 2D only
   const POSE_3D = { th: -0.62, tilt: 0.98 };
+  const OVERLAY = { bfs: "bfs", ucs: "skipped", astar: "astar" }; // map colour for each algorithm
+  // Pseudocode for Step through; the lines a step runs are highlighted.
+  const CODE = {
+    bfs: ["queue.push(start)", "while queue is not empty:", "  node = queue.pop_front()", "  if node is goal: return path", "  if node in closed: continue", "  closed.add(node)", "  for n in neighbours(node):", "    if n not in closed:", "      queue.push(n)", "return no route"],
+    ucs: ["heap.push(start, priority 0)", "while heap is not empty:", "  node = heap.pop_min()", "  if node is goal: return path", "  if node in closed: continue", "  closed.add(node)", "  for n in neighbours(node):", "    if n not in closed:", "      heap.push(n, g + cost(node, n))", "return no route"],
+    astar: ["heap.push(start, priority h(start))", "while heap is not empty:", "  node = heap.pop_min()", "  if node is goal: return path", "  if node in closed: continue", "  closed.add(node)", "  for n in neighbours(node):", "    if n not in closed:", "      heap.push(n, g + cost(node, n) + h(n))", "return no route"],
+  };
+  const QUEUE_KIND = {
+    bfs: "First in, first out: cells leave in the order they joined.",
+    ucs: "Binary min-heap, ordered by g, the cost so far.",
+    astar: "Binary min-heap, ordered by f = g + h.",
+  };
+  const QUEUE_NOTE = {
+    bfs: "A cell can join the queue twice, from two neighbours. The later copy is skipped as stale when it comes out.",
+    ucs: "A cell can sit in the heap twice. There is no decrease-key, so the cheaper copy comes out first and the older one is skipped as stale.",
+    astar: "A cell can sit in the heap twice. There is no decrease-key, so the cheaper copy comes out first and the older one is skipped as stale.",
+  };
   const HINTS = {
     start: "Click a dry cell to move the start, or drag a pin.",
     end: "Click a dry cell to move the flag, or drag a pin.",
@@ -25,10 +42,11 @@
     layers: { explored: true, skipped: false, bfs: true, best: true, numbers: false },
     t: 0, playing: false, last: 0,
     hover: null, focus: null,
-    view: "2d", styleChoice: "auto", style: "terrain", fromStyle: "terrain", fadeStart: 0, fadeMs: THEME_FADE_MS,
+    mode: "compare", algo: "astar", view: "2d", styleChoice: "auto", style: "terrain", fromStyle: "terrain", fadeStart: 0, fadeMs: THEME_FADE_MS,
   };
   let R = null, terrain = null, terrainKey = "", labels = [], view = null, lastHash = "";
   let camKey = "", camMoved = 0; // when the camera last moved, for the lighter 3D surface
+  let queueCache = { R: null, algo: "", k: -1, counts: null }, stepShown = "";
 
   const rows = () => S.grid.length, cols = () => S.grid[0].length;
   const same = (a, b) => a[0] === b[0] && a[1] === b[1];
@@ -36,8 +54,9 @@
   const clamp01 = (x) => Math.max(0, Math.min(1, x));
 
   // ---------- timeline: one clock for the search, the routes and the marker ----------
+  // Compare runs as long as the longest search; Step through as long as the chosen one.
   function timing() {
-    const N = R.longest, stepMs = Math.max(8, Math.min(60, 5000 / N)), searchEnd = N * stepMs;
+    const N = S.mode === "step" ? R[S.algo].nodes : R.longest, stepMs = Math.max(8, Math.min(60, 5000 / N)), searchEnd = N * stepMs;
     return { N, stepMs, searchEnd, total: searchEnd + DRAW_MS + WALK_MS };
   }
   const stepAt = (t) => Math.min(timing().N, Math.floor(t / timing().stepMs + 1e-9));
@@ -139,6 +158,8 @@
   function readHash() {
     const p = new URLSearchParams(location.hash.slice(1));
     S.view = p.get("view") === "3d" ? "3d" : "2d";
+    S.mode = p.get("mode") === "step" ? "step" : "compare";
+    S.algo = Runs.ALGOS.includes(p.get("algo")) ? p.get("algo") : "astar";
     S.styleChoice = T.STYLES[p.get("style")] ? p.get("style") : "auto";
     const name = MAPS[p.get("map")] ? p.get("map") : "detour";
     const base = PF.parseMap(window.PATHFINDER_MAPS[name]);
@@ -151,6 +172,8 @@
   function writeHash() {
     const p = new URLSearchParams(location.hash.slice(1));
     p.set("view", S.view);
+    if (S.mode === "step") (p.set("mode", "step"), p.set("algo", S.algo));
+    else (p.delete("mode"), p.delete("algo"));
     if (S.styleChoice === "auto") p.delete("style");
     else p.set("style", S.styleChoice);
     p.set("map", S.map);
@@ -293,6 +316,7 @@
       k: stepAt(S.t), kf: Math.min(tm.N, S.t / tm.stepMs), rise: !reduce, routeFrac: clamp01(after / DRAW_MS), walkFrac: clamp01((after - DRAW_MS) / WALK_MS),
       style: S.style, fromStyle: S.fromStyle, fade,
       layers: S.layers, hover: S.hover, focus: S.focus,
+      step: S.mode === "step" ? { algo: S.algo, queue: queueAt(stepAt(S.t)) } : null,
       controls: MapLabels.controlBoxes(view.canvas, document.querySelectorAll("#mapbox .chip, #mapbox .overlay-zoom .btn")),
     });
     if (S.hover || S.focus) placeTip();
@@ -304,6 +328,7 @@
   function setStyle(name, fadeMs) {
     const ov = T.STYLES[name].overlay, box = $("mapbox");
     for (const k in ov) box.style.setProperty("--ov-" + k, ov[k]); // layer swatches match the map
+    box.parentElement.style.setProperty("--ov-run", ov[OVERLAY[S.algo]]); // the legend sits under the map
     box.classList.toggle("dark-map", T.STYLES[name].dark);
     renderStylePicker();
     if (name === S.style) return;
@@ -335,11 +360,100 @@
     $("styleBtn").setAttribute("aria-expanded", String(open));
   }
 
+  // ---------- Step through ----------
+  function queueAt(k) {
+    const c = queueCache;
+    if (c.R !== R || c.algo !== S.algo || c.k !== k) queueCache = { R, algo: S.algo, k, counts: Runs.frontierAt(R[S.algo], S.grid, S.start, k) };
+    return queueCache.counts;
+  }
+  const cellName = ([r, c]) => `(${r}, ${c})`;
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+  function renderStep(k) {
+    const run = R[S.algo], N = run.nodes, key = [R.longest, run.nodes, S.algo, k, S.start, S.end].join();
+    if (key === stepShown && R === queueCache.R) return;
+    stepShown = key;
+    const t = k ? run.trace[k - 1] : null, cost = S.algo !== "bfs";
+    let cells = 0;
+    for (let i = 0; i < k; i++) if (!run.trace[i].stale) cells++;
+    $("stepCount").textContent = `Step ${fmt(k)} of ${fmt(N)} nodes taken off the queue (includes stale). ${plural(cells, "distinct cell", "distinct cells")} so far.`;
+    let sentence;
+    if (!t) sentence = `The queue holds only the start, ${cellName(S.start)}. Press Next to take it out.`;
+    else if (t.goal) sentence = `Took the flag, ${cellName(t.node)}, off the queue${cost ? ` with g ${t.g}` : ""}. The search is done: the route ${cost ? `costs ${run.cost}` : `takes ${run.steps} steps`}.`;
+    else if (t.stale) sentence = `Took ${cellName(t.node)} off the queue, but it was already closed. This copy is stale, so it is skipped.`;
+    else sentence = `Expanded ${cellName(t.node)}${cost ? ` with g ${t.g}` : ""}. Pushed ${plural(t.pushed, "neighbour", "neighbours")}, skipped ${t.skipped} already closed.`;
+    if (k === N && !run.path) sentence = "The queue is empty and the flag was never reached, so there is no route.";
+    $("stepSentence").textContent = sentence;
+
+    // the queue after this step, front first, with the next real expansion marked
+    const hStart = Math.abs(S.start[0] - S.end[0]) + Math.abs(S.start[1] - S.end[1]);
+    const entries = t ? t.queue : [{ node: S.start, g: 0, f: S.algo === "astar" ? hStart : 0, stale: false }];
+    const size = t ? t.frontier : 1, seen = new Set();
+    let next = false;
+    const rows = entries.map((q, i) => {
+      const id = String(q.node);
+      let tag = "";
+      if (q.stale) tag = "stale";
+      else if (seen.has(id)) tag = "duplicate";
+      else if (!next && !(t && t.goal)) (tag = "next out"), (next = true); // nothing comes out after the flag
+      seen.add(id);
+      const h = S.algo === "astar" ? q.f - q.g : 0;
+      return `<tr${tag === "next out" ? ' class="next"' : ""}><td>${i + 1}</td><td>${cellName(q.node)}</td><td class="num">${q.g}</td><td class="num">${h}</td><td class="num"><b>${q.f}</b></td><td class="tag">${tag}</td></tr>`;
+    });
+    if (!size) rows.push('<tr><td colspan="6" class="tag">The queue is empty.</td></tr>');
+    else if (size > entries.length) rows.push(`<tr><td colspan="6" class="tag">and ${fmt(size - entries.length)} more in the queue</td></tr>`);
+    $("qBody").innerHTML = rows.join("");
+    $("queue").classList.toggle("no-cost", !cost);
+    $("qKind").textContent = QUEUE_KIND[S.algo];
+    $("qNote").textContent = QUEUE_NOTE[S.algo];
+
+    // the pseudocode, with the lines this step runs highlighted
+    const on = !t ? [0] : k === N && !run.path ? [9] : t.goal ? [2, 3] : t.stale ? [2, 4] : [2, 5, 6, 7].concat(t.pushed ? [8] : []);
+    const esc = (x) => x.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    $("code").innerHTML = CODE[S.algo].map((line, i) => (on.includes(i) ? `<mark class="ln">${esc(line)}</mark>` : `<span class="ln">${esc(line)}</span>`)).join("");
+  }
+
+  // Keep the step number when the timeline changes length (mode or algorithm).
+  function keepStep(change) {
+    const before = timing(), k = stepAt(S.t), done = S.t >= before.total;
+    change();
+    const tm = timing();
+    S.playing = false;
+    S.t = done ? tm.total : Math.min(k, tm.N) * tm.stepMs;
+    stepShown = "";
+  }
+
+  function renderMode() {
+    const step = S.mode === "step";
+    document.querySelectorAll(".step-only").forEach((el) => (el.hidden = !step));
+    document.querySelectorAll(".compare-only").forEach((el) => (el.hidden = step));
+    document.querySelectorAll("[data-nav]").forEach((b) => b.setAttribute("aria-pressed", String(step ? b.dataset.nav === "step" : b.dataset.nav === S.view)));
+    document.querySelectorAll("[data-cam]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.cam === S.view)));
+    document.querySelectorAll("[data-algo]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.algo === S.algo)));
+    $("mapbox").parentElement.style.setProperty("--ov-run", T.STYLES[S.style].overlay[OVERLAY[S.algo]]);
+    renderTimeline();
+    view.kick();
+  }
+
+  function setNav(n) {
+    keepStep(() => (S.mode = n === "step" ? "step" : "compare"));
+    if (n !== "step" && n !== S.view) setView(n, false);
+    writeHash();
+    renderMode();
+  }
+
+  function setAlgo(a) {
+    keepStep(() => (S.algo = a));
+    writeHash();
+    renderMode();
+  }
+
   // ---------- 2D and 3D: the same run and camera, tilted ----------
   function setView(v, instant) {
     S.view = v;
     if (v === "3d" && PAINT.includes(S.tool)) S.tool = "start";
-    document.querySelectorAll("[data-view]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === v)));
+    document.querySelectorAll("[data-cam]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.cam === v)));
+    if (S.mode === "compare") document.querySelectorAll("[data-nav]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.nav === v)));
     view.spin = 0;
     view.mode3d = v === "3d";
     fitBoard(instant);
@@ -405,6 +519,7 @@
     $("play").textContent = S.playing ? "Pause" : S.t >= tm.total ? "Replay" : "Play";
     $("prev").disabled = $("toStart").disabled = S.t <= 0;
     $("next").disabled = S.t >= tm.total;
+    if (S.mode === "step") renderStep(k);
     const cur = $("cursor");
     if (cur) cur.setAttribute("x1", ((k / tm.N) * 600).toFixed(1)), cur.setAttribute("x2", ((k / tm.N) * 600).toFixed(1));
   }
@@ -421,16 +536,17 @@
 
   // ---------- tooltip: the A* numbers for the cell under the pointer or the keyboard cursor ----------
   function tipText([r, c]) {
-    const v = S.grid[r][c], k = r * cols() + c, A = R.astar;
+    const v = S.grid[r][c], k = r * cols() + c, A = S.mode === "step" ? R[S.algo] : R.astar;
     const head = v === -1 ? `Cell (${r}, ${c}), creek` : `Cell (${r}, ${c}), elevation ${v}`;
     const pin = same([r, c], S.start) ? "The start. " : same([r, c], S.end) ? "The flag. " : "";
     if (v === -1) return [head, "Creek, impassable"];
     const s = A.closeStep[k];
     if (s >= 0) {
       const t = A.trace[s], h = t.f - t.g;
-      return [head, `g ${t.g} + h ${h} = f ${t.f}`, `${pin}A* expanded it at step ${s + 1} of ${A.nodes}`];
+      const cost = A.algo === "astar" ? `g ${t.g} + h ${h} = f ${t.f}` : A.algo === "ucs" ? `g ${t.g}` : null;
+      return [head].concat(cost ? [cost] : [], `${pin}${A.name} expanded it at step ${s + 1} of ${A.nodes}`);
     }
-    return [head, pin + (A.reached[k] ? "In A*'s queue, never expanded" : "Never reached by A*")];
+    return [head, pin + (A.reached[k] ? `In ${A.name}'s queue, never expanded` : `Never reached by ${A.name}`)];
   }
   function renderTip() {
     const cell = S.hover || S.focus, tip = $("tip");
@@ -517,7 +633,9 @@
       S.playing = false;
       seekStep(Number(e.target.value));
     });
-    document.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view, false)));
+    document.querySelectorAll("[data-nav]").forEach((b) => b.addEventListener("click", () => setNav(b.dataset.nav)));
+    document.querySelectorAll("[data-cam]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.cam, false)));
+    document.querySelectorAll("[data-algo]").forEach((b) => b.addEventListener("click", () => setAlgo(b.dataset.algo)));
     $("styleBtn").addEventListener("click", () => openStyles($("styleMenu").hidden));
     $("styleMenu").addEventListener("click", (e) => {
       const b = e.target.closest("[data-style]");
@@ -576,6 +694,7 @@
         fitBoard(false);
       }
       if (S.view !== viewBefore) setView(S.view, false);
+      renderMode();
       setStyle(styleFor(PathfinderTheme.current()), STYLE_FADE_MS);
     });
   }
@@ -599,8 +718,8 @@
   });
   setStyle(styleFor(PathfinderTheme.current()), 0);
   PathfinderTheme.onChange((theme, fade) => setStyle(styleFor(theme), fade ? THEME_FADE_MS : 0));
-  document.querySelectorAll("[data-view]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === S.view)));
   fitBoard(true);
   // open on the finished run, so the first view already makes the point
   refresh("end");
+  renderMode();
 })();

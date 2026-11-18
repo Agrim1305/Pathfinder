@@ -59,6 +59,23 @@
     return out;
   }
 
+  // How many copies of each cell sit in the queue after k steps, by replaying
+  // the trace: each step takes one copy of its cell out, and an expansion adds
+  // one copy of every neighbour that isn't closed yet, just as the search does.
+  function frontierAt(run, grid, start, k) {
+    const rows = grid.length, cols = grid[0].length;
+    const count = new Int32Array(rows * cols), closed = new Uint8Array(rows * cols);
+    count[start[0] * cols + start[1]] = 1;
+    for (let i = 0; i < k; i++) {
+      const t = run.trace[i], [r, c] = t.node;
+      count[r * cols + c]--;
+      if (t.stale || t.goal) continue;
+      closed[r * cols + c] = 1;
+      for (const [nr, nc] of PF.getNeighbours(r, c, rows, cols, grid)) if (!closed[nr * cols + nc]) count[nr * cols + nc]++;
+    }
+    return count;
+  }
+
   const pct = (a, b) => Math.round((1 - a / b) * 100);
 
   // The headline and its explanation, written from the numbers.
@@ -81,7 +98,7 @@
     };
   }
 
-  const api = { solve, headline, ALGOS, NAMES };
+  const api = { solve, headline, frontierAt, ALGOS, NAMES };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Runs = api;
 })(typeof window !== "undefined" ? window : globalThis);

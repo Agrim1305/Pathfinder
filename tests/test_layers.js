@@ -26,6 +26,11 @@ for (const m of MAPS) {
     assert.strictEqual(R[algo].nodes, raw.order.length, `${m} ${algo}: nodes taken off the queue`);
     assert.strictEqual(R[algo].cells, closed(algo).size, `${m} ${algo}: distinct cells`);
     assert.strictEqual(R[algo].cost, PF.pathCost(grid, raw.path), `${m} ${algo}: cost`);
+    // the queue that Step through shows has as many entries as the search's own queue at every step
+    for (let k = 0; k <= R[algo].nodes; k++) {
+      const size = Runs.frontierAt(R[algo], grid, start, k).reduce((a, b) => a + b, 0);
+      assert.strictEqual(size, k ? R[algo].trace[k - 1].frontier : 1, `${m} ${algo}: queue size after step ${k}`);
+    }
   }
   checks++;
 }

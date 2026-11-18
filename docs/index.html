@@ -8,23 +8,24 @@
       name="description"
       content="Watch BFS, Dijkstra and A* search hilly ground for the lowest-effort route, with every number from a real run."
     />
-    <script src="shared/theme.js?v=19"></script>
+    <script src="shared/theme.js?v=21"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
     />
-    <link rel="stylesheet" href="shared/theme.css?v=19" />
-    <link rel="stylesheet" href="styles.css?v=19" />
+    <link rel="stylesheet" href="shared/theme.css?v=21" />
+    <link rel="stylesheet" href="styles.css?v=21" />
   </head>
   <body>
     <header class="top">
       <a class="brand" href="./"><b>Pathfinder</b><span>Search algorithms, made visible</span></a>
       <div class="top-controls scroll-x">
         <nav class="seg" aria-label="View">
-          <button type="button" data-view="2d" aria-pressed="true">Grid 2D</button>
-          <button type="button" data-view="3d" aria-pressed="false">Grid 3D</button>
+          <button type="button" data-nav="2d" aria-pressed="true">Grid 2D</button>
+          <button type="button" data-nav="3d" aria-pressed="false">Grid 3D</button>
+          <button type="button" data-nav="step" aria-pressed="false">Step through</button>
           <a href="adelaide/">Adelaide CBD</a>
         </nav>
         <label class="top-label" for="map">Map</label>
@@ -49,7 +50,11 @@
             aria-label="Map of the board: hills, the creek, the start and the flag, with what A* explored and both routes drawn on top. In Grid 3D, drag to turn it. Arrow keys move the map and the ring at its centre, Enter uses the selected tool on that cell, plus and minus zoom."
           ></canvas>
           <div class="overlay-top">
-            <div class="chips scroll-x" role="group" aria-label="Map layers">
+            <div class="seg pill cam step-only" role="group" aria-label="Camera" hidden>
+              <button type="button" data-cam="2d" aria-pressed="true">2D</button>
+              <button type="button" data-cam="3d" aria-pressed="false">3D</button>
+            </div>
+            <div class="chips scroll-x compare-only" role="group" aria-label="Map layers">
               <button type="button" class="chip" data-layer="explored" aria-pressed="true"><i class="sw sw-dot"></i>A* explored</button>
               <button type="button" class="chip" data-layer="skipped" aria-pressed="false"><i class="sw sw-hatch"></i>Cells A* skipped</button>
               <button type="button" class="chip" data-layer="bfs" aria-pressed="true"><i class="sw sw-dash"></i>BFS route</button>
@@ -67,6 +72,12 @@
           <div class="tip" id="tip" role="status" hidden></div>
         </div>
 
+        <div class="legend step-only" aria-hidden="true" hidden>
+          <span><i class="lg-dot"></i>Expanded</span>
+          <span><i class="lg-ring"></i>In the queue</span>
+          <span><i class="lg-now"></i>Expanding now</span>
+          <span><i class="lg-ramp"></i>Elevation 0 to 9</span>
+        </div>
         <div class="tools">
           <span class="tools-label" id="tools-label">Click a cell to</span>
           <div class="seg tool-seg scroll-x" role="group" aria-labelledby="tools-label">
@@ -104,16 +115,39 @@
             <span class="mono dim" id="stepLabel"></span>
           </div>
           <input type="range" id="scrub" min="0" max="1" step="1" value="0" aria-label="Search step" />
-          <div class="spark-head">
+          <div class="spark-head compare-only">
             <span>Queue size after each step. One step takes one node off a queue.</span>
             <span id="peaks" class="peaks"></span>
           </div>
-          <svg id="spark" class="spark" viewBox="0 0 600 56" preserveAspectRatio="none" aria-hidden="true"></svg>
-          <div class="spark-flags" id="flags" aria-hidden="true"></div>
+          <svg id="spark" class="spark compare-only" viewBox="0 0 600 56" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <div class="spark-flags compare-only" id="flags" aria-hidden="true"></div>
         </section>
       </main>
 
       <aside class="side" aria-label="Results">
+        <div class="side-group step-only" hidden>
+          <section class="card step-card">
+            <div class="seg algo-seg" role="group" aria-label="Algorithm">
+              <button type="button" data-algo="bfs" aria-pressed="false">BFS</button>
+              <button type="button" data-algo="ucs" aria-pressed="false">Dijkstra</button>
+              <button type="button" data-algo="astar" aria-pressed="true">A*</button>
+            </div>
+            <p class="mono dim step-count" id="stepCount"></p>
+            <p class="step-sentence" id="stepSentence" aria-live="polite"></p>
+          </section>
+          <section class="card">
+            <div class="q-head"><h2>Queue</h2><span class="dim" id="qKind"></span></div>
+            <table class="queue" id="queue">
+              <thead><tr><th scope="col">#</th><th scope="col">Cell</th><th scope="col" class="num">g</th><th scope="col" class="num">h</th><th scope="col" class="num">f</th><th scope="col"><span class="visually-hidden">Note</span></th></tr></thead>
+              <tbody id="qBody"></tbody>
+            </table>
+            <p class="small dim" id="qNote"></p>
+          </section>
+          <section class="card code-card" aria-label="Pseudocode, with the lines this step runs highlighted">
+            <pre class="code" id="code"></pre>
+          </section>
+        </div>
+        <div class="side-group compare-only">
         <section class="card">
           <h1 id="headline">Finding routes…</h1>
           <p id="summary"></p>
@@ -128,6 +162,7 @@
             queue.
           </p>
         </section>
+        </div>
         <p class="foot">
           The same searches as <code>pathfinder.py</code>, checked to give identical results on every bundled map.
           Moving a pin or reshaping the ground runs all three again.
@@ -135,15 +170,15 @@
       </aside>
     </div>
 
-    <script src="pathfinder.js?v=19"></script>
-    <script src="maps.js?v=19"></script>
-    <script src="terrain.js?v=19"></script>
-    <script src="runs.js?v=19"></script>
-    <script src="shared/view.js?v=19"></script>
-    <script src="shared/labels.js?v=19"></script>
-    <script src="shared/scroll.js?v=19"></script>
-    <script src="board.js?v=19"></script>
-    <script src="grid3d.js?v=19"></script>
-    <script src="app.js?v=19"></script>
+    <script src="pathfinder.js?v=21"></script>
+    <script src="maps.js?v=21"></script>
+    <script src="terrain.js?v=21"></script>
+    <script src="runs.js?v=21"></script>
+    <script src="shared/view.js?v=21"></script>
+    <script src="shared/labels.js?v=21"></script>
+    <script src="shared/scroll.js?v=21"></script>
+    <script src="board.js?v=21"></script>
+    <script src="grid3d.js?v=21"></script>
+    <script src="app.js?v=21"></script>
   </body>
 </html>
