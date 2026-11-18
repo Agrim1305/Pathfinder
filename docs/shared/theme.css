@@ -154,9 +154,32 @@ button {
   font-weight: 700;
   letter-spacing: -0.02em;
 }
-.brand span {
+.brand span,
+.brand .back {
   font-size: 12.5px;
   color: var(--dim);
+}
+.brand .back {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.brand .back:hover {
+  color: var(--ink);
+}
+
+/* One control for every page: the real map, then the grid views under "How it works". */
+.nav-seg {
+  max-width: 100%;
+}
+.nav-seg .seg-label {
+  padding: 0 4px 0 14px;
+  border-left: 1px solid var(--edge);
+  border-radius: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dim);
+  background: transparent;
+  box-shadow: none;
 }
 .top-controls {
   display: flex;
@@ -209,6 +232,10 @@ button {
 .seg > [aria-pressed="true"] {
   background: var(--seg-on);
   box-shadow: var(--shadow);
+}
+.seg.pill,
+.seg.pill > * {
+  border-radius: 999px;
 }
 
 .icon-btn {
@@ -323,11 +350,15 @@ button {
   .top {
     padding: 10px 16px;
   }
-  .top-controls {
+  .top-controls,
+  .nav-seg {
     width: 100%;
     flex-wrap: nowrap;
     overflow-x: auto;
     padding-bottom: 2px;
+  }
+  .nav-seg {
+    display: flex;
   }
   .top-controls > * {
     flex: none;

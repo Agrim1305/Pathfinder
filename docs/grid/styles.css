@@ -457,12 +457,6 @@
   margin-left: auto;
   order: 2;
 }
-.seg.pill {
-  border-radius: 999px;
-}
-.seg.pill > * {
-  border-radius: 999px;
-}
 .legend {
   display: flex;
   flex-wrap: wrap;

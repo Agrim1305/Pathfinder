@@ -49,5 +49,20 @@ for (const [name, s] of Object.entries(T.STYLES)) {
   const r = ratio(s.ink, s.stage);
   if (r < TEXT) { fails++; console.log(`${name} map: label ink on stage is ${r.toFixed(2)}:1`); }
 }
+// Adelaide map labels in both palettes: text over its halo, the halo over
+// the map background (semi-transparent colours are blended first).
+const { PALETTES, parse } = require("../docs/adelaide/palette.js");
+const over = (fg, bg) => {
+  const f = parse(fg), b = parse(bg), a = f[3] / 255;
+  return "#" + [0, 1, 2].map((i) => Math.round(f[i] * a + b[i] * (1 - a)).toString(16).padStart(2, "0")).join("");
+};
+for (const [name, P] of Object.entries(PALETTES)) {
+  const halo = over(P.halo, P.bg), streetHalo = over(P.streetHalo, P.bg);
+  for (const [what, fg, bg] of [["labels", P.ink, halo], ["river label", P.river, halo], ["street names", P.street, streetHalo], ["map credit", over(P.attr, P.bg), P.bg]]) {
+    checks++;
+    const r = ratio(fg, bg);
+    if (r < TEXT) { fails++; console.log(`Adelaide ${name}: ${what} ${r.toFixed(2)}:1`); }
+  }
+}
 console.log(`${checks - fails} of ${checks} colour pairs meet WCAG AA in both themes`);
 process.exit(fails ? 1 : 0);

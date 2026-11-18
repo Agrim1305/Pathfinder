@@ -1,87 +1,16 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pathfinder: real Adelaide CBD</title>
-<meta name="description" content="BFS, Dijkstra and A* on the real Adelaide city centre walking network, in 2D and 3D, built from OpenStreetMap data.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="styles.css?v=13">
-</head>
-<body>
-<header class="top">
-  <div class="brand"><a href="../">Pathfinder</a><span>Search algorithms on a real city</span></div>
-  <nav aria-label="Views" class="seg seg-3">
-    <a href="../">Grid demo</a>
-    <span aria-current="page">Adelaide CBD</span>
-  </nav>
-</header>
-
-<div class="body">
-  <main class="stage" aria-label="Adelaide city centre map">
-    <div class="map" id="map">
-      <canvas id="cv" tabindex="0" role="img"
-        aria-label="Map of Adelaide city centre from OpenStreetMap, with real building shapes and heights. The start and flag pins, the area A* explored and the routes are drawn on top. Arrow keys pan, plus and minus zoom."></canvas>
-      <p class="loading" id="loading">Loading the map…</p>
-      <div class="overlay-top">
-        <div role="group" aria-label="Map layers" class="chips scroll-x">
-          <button type="button" class="chip glass" data-layer="aExp" aria-pressed="true"><i class="sw sw-dot a"></i>A* explored</button>
-          <button type="button" class="chip glass" data-layer="dOnly" aria-pressed="false"><i class="sw sw-dot d"></i>Junctions A* skipped</button>
-          <button type="button" class="chip glass" data-layer="bfs" aria-pressed="true"><i class="sw sw-line b"></i>BFS route</button>
-          <button type="button" class="chip glass" data-layer="best" aria-pressed="true"><i class="sw sw-line s"></i>Shortest route</button>
-        </div>
-        <div class="right">
-          <div role="group" aria-label="Camera" class="seg pill glass">
-            <button type="button" id="go2d" aria-pressed="false">2D</button>
-            <button type="button" id="go3d" aria-pressed="true">3D</button>
-          </div>
-          <button type="button" class="primary" id="replay"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>Replay</button>
-        </div>
-      </div>
-      <div class="overlay-zoom">
-        <button type="button" class="sq glass" id="zin" aria-label="Zoom in">+</button>
-        <button type="button" class="sq glass" id="zout" aria-label="Zoom out">&#8722;</button>
-        <button type="button" class="sq glass" id="fit" aria-label="Fit the route in view"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg></button>
-      </div>
-    </div>
-    <div class="pins">
-      <div role="group" aria-label="Which pin the next click moves" class="seg">
-        <button type="button" id="pStart" aria-pressed="true">Move start</button>
-        <button type="button" id="pEnd" aria-pressed="false">Move flag</button>
-      </div>
-      <label class="jump">Or jump to <select id="marks"><option value="">a landmark</option></select></label>
-      <button type="button" class="ghost" id="resetPins">Reset pins</button>
-    </div>
-    <p class="hint" id="hint" aria-live="polite"></p>
-    <p class="help">Drag to turn the map in 3D, or Shift and drag to slide it. In 2D, drag slides the map. Scroll or pinch to zoom.</p>
-  </main>
-
-  <aside class="side" aria-label="Results">
-    <section class="card">
-      <h1 id="headline">Finding routes…</h1>
-      <p id="summary"></p>
-    </section>
-    <section class="card rows">
-      <div class="row"><span class="nm"><i class="k b"></i>BFS</span><span class="mono" id="bfsDist"></span><span class="mono dim" id="bfsN"></span></div>
-      <div class="row"><span class="nm"><i class="k d"></i>Dijkstra</span><span class="mono" id="ucsDist"></span><span class="mono dim" id="ucsN"></span></div>
-      <div class="row"><span class="nm"><i class="k s"></i>A*</span><span class="mono" id="astarDist"></span><span class="mono dim" id="astarN"></span></div>
-    </section>
-    <section class="card">
-      <h2>How each one counts</h2>
-      <p class="small">BFS counts street segments, so it takes the route with the fewest of them. Dijkstra and A* count metres. A* also aims at the flag using the straight-line distance to it, which can never be longer than the real walk, so its route is still the shortest.</p>
-    </section>
-    <section class="card">
-      <h2>About the map</h2>
-      <p class="small" id="about"></p>
-      <p class="tiny">Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>, ODbL.</p>
-    </section>
-  </aside>
-</div>
-<script src="graph.js?v=13"></script>
-<script src="../shared/view.js?v=13"></script>
-<script src="../shared/labels.js?v=13"></script>
-<script src="../shared/scroll.js?v=13"></script>
-<script src="map.js?v=13"></script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <title>Pathfinder: Adelaide CBD</title>
+    <!-- The Adelaide map is now the front page. Forward there, keeping the hash. -->
+    <script>
+      location.replace("../" + location.hash);
+    </script>
+    <meta http-equiv="refresh" content="1; url=../" />
+    <link rel="canonical" href="../" />
+  </head>
+  <body>
+    <p>The Adelaide map has moved to <a href="../">the front page</a>.</p>
+  </body>
 </html>

@@ -6,7 +6,7 @@ Finds the lowest-effort route across terrain with hills and obstacles, and shows
 choice of search algorithm matters. BFS, Dijkstra (Uniform Cost Search) and A\* are
 implemented from scratch in Python with no external dependencies.
 
-**[Try it in your browser](https://agrim1305.github.io/Pathfinder/)**: BFS, Dijkstra and A\* search the same hilly map, and a timeline lets you scrub through every step. Hover any cell for its real g, h and f. Move the start and the flag, dig or fill the creek, raise or lower the ground, and all three searches run again. The page opens on `maps/detour.txt`, the map behind the figures below, and `python benchmark.py` reproduces them. The browser version is a JavaScript copy of the same algorithms, and CI checks it gives identical results to the Python code on every map. Light and dark themes follow your system, with a toggle in the header.
+**[Try it in your browser](https://agrim1305.github.io/Pathfinder/)**: the site opens on the real walking network of Adelaide's city centre. Its **[grid demo](https://agrim1305.github.io/Pathfinder/grid/)** shows how the searches work: BFS, Dijkstra and A\* search the same hilly map, and a timeline lets you scrub through every step. Hover any cell for its real g, h and f. Move the start and the flag, dig or fill the creek, raise or lower the ground, and all three searches run again. The page opens on `maps/detour.txt`, the map behind the figures below, and `python benchmark.py` reproduces them. The browser version is a JavaScript copy of the same algorithms, and CI checks it gives identical results to the Python code on every map. Light and dark themes follow your system, with a toggle in the header.
 
 **The short version:** counting steps is not enough. On the demo map, BFS (which only
 counts steps) walks straight over a hill and pays **35% more effort** than the best route of
@@ -53,7 +53,7 @@ What the numbers show:
 
 ## Real city: Adelaide CBD
 
-**[Open the Adelaide demo](https://agrim1305.github.io/Pathfinder/adelaide/)**
+**[Open the Adelaide map](https://agrim1305.github.io/Pathfinder/)**, the front page of the site.
 
 ![Adelaide CBD in 3D: the BFS route (orange) uses fewer street segments but walks 484 m further than the shortest route (blue)](docs/screenshots/adelaide.png)
 
@@ -76,7 +76,8 @@ drawn in 2D or 3D. Click the map to move the start or the flag, and all three se
   python tools/fetch_adelaide.py && python tools/prep_adelaide.py
   ```
 
-- To run it locally, serve `docs/` and open http://localhost:8000/adelaide/. The page loads
+- To run it locally, serve `docs/` and open http://localhost:8000/ (the grid demo is at
+  http://localhost:8000/grid/). The page loads
   its data over HTTP, so opening the file directly doesn't work.
 
   ```bash
@@ -166,8 +167,11 @@ new ones.
 pathfinder.py        search algorithms, cost model and command-line interface
 benchmark.py         compares every algorithm on every map
 visualize.py         draws the README images (needs matplotlib)
-docs/                browser demo (index.html, pathfinder.js) and README images
-docs/adelaide/       Adelaide CBD demo: graph.js (searches), map.js (2D and 3D map), data
+docs/index.html      the front page: the Adelaide CBD map
+docs/adelaide/       Adelaide code and data: graph.js (searches), map.js (2D and 3D map)
+docs/grid/           the grid demo: Grid 2D, Grid 3D and Step through
+docs/                shared engine files (pathfinder.js, terrain.js, runs.js, generate.js)
+docs/shared/         camera, theme, labels and other code both pages use
 example.py           using the module from Python
 generate_maps.py     builds the test maps
 maps/                six maps, from a 5×5 demo to a 20×20 random terrain, plus the browser demo map

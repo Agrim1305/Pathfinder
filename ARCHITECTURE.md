@@ -8,10 +8,11 @@
   same neighbour order (up, down, left, right), the same `(priority, counter)` tie-breaking
   and the same lazy deletion. `tests/compare_js.js` runs both on every bundled map and fails
   if any path or visit count differs.
-- `docs/index.html` is the grid demo. It's a static page with no build step, served by
-  GitHub Pages from `docs/`.
-- `docs/adelaide/` is the real-city demo. It runs the same three searches on Adelaide's
-  walking network, described below.
+- `docs/index.html`, the front page, is the real-city demo. It runs the same three searches
+  on Adelaide's walking network, described below; its code and data live in
+  `docs/adelaide/`. `docs/adelaide/index.html` only forwards old links to the front page.
+- `docs/grid/` is the grid demo (Grid 2D, Grid 3D and Step through). Both are static pages
+  with no build step, served by GitHub Pages from `docs/`.
 
 ## Adelaide CBD pipeline
 

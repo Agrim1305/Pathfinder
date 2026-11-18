@@ -6,6 +6,8 @@
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
+  // the data sits beside this script, wherever the page that loads it lives
+  const DATA = new URL('data/adelaide_cbd.json', document.currentScript.src).href;
 
   class MapApp {
     constructor(raw) {
@@ -36,15 +38,22 @@
       this.state = { aExp: true, dOnly: false, bfs: true, best: true, start: D.sp, end: D.ep, place: 'start', note: '' };
       this.t0 = 0;
       this.widths = new Map(); // label widths, measured once per font and text
+      // Map colours follow the page theme, fading over 300 ms (at once under reduced motion).
+      const P = AdelaidePalette.PALETTES;
+      this.pal = { from: P[PathfinderTheme.current()], to: P[PathfinderTheme.current()], t0: 0 };
+      PathfinderTheme.onChange((theme, fade) => {
+        this.pal = { from: this.pal.to, to: P[theme], t0: fade ? performance.now() : 0 };
+        this.view.kick();
+      });
       this.reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
       this.res = AdelaideGraph.solve(D, D.sp, D.ep);
       this.bindControls();
       this.view = new MapView($('cv'), {
         cam: { th: -0.38, tilt: 0.92, k: 0.5, cx: 0, cy: 0 },
         mode3d: true,
-        height: (w) => Math.round(Math.min(Math.max(w * 0.66, 420), 760)),
+        height: (w) => mapHeight(w),
         // the search replay runs on its own clock from t0; reduced motion shows the end at once
-        draw: (now) => { const el = this.reduce ? 1e9 : now - this.t0; this.draw(el); return el < this.timeline().end + 50; },
+        draw: (now) => { const el = this.reduce ? 1e9 : now - this.t0; this.draw(el); return el < this.timeline().end + 50 || this.pal.t0 > 0; },
         pick: (X, Y) => this.pick(X, Y),
       });
       this.fit(true);
@@ -106,14 +115,19 @@
       this.view.fit(pts, instant);
     }
     restart() { this.t0 = performance.now(); this.view.kick(); }
+    colours() {
+      const f = this.pal.t0 ? Math.min(1, (performance.now() - this.pal.t0) / 300) : 1;
+      if (f >= 1) this.pal.t0 = 0;
+      return AdelaidePalette.mix(this.pal.from, this.pal.to, f);
+    }
     timeline() {
       const n = this.res.A.order.length, step = Math.min(14, 1800 / Math.max(n, 1));
       const reveal = n * step;
       return { step, reveal, drawEnd: reveal + 1300, end: reveal + 1300 + 2800 };
     }
     draw(el) {
-      const view = this.view, ctx = view.ctx, D = this.D, m = view.cam, W = view.W, H = view.H;
-      ctx.fillStyle = '#E9EBE6'; ctx.fillRect(0, 0, W, H);
+      const view = this.view, ctx = view.ctx, D = this.D, m = view.cam, W = view.W, H = view.H, C = this.colours();
+      ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
       const c = Math.cos(m.th), s = Math.sin(m.th), ct = Math.cos(m.tilt), st = Math.sin(m.tilt), k = m.k;
       const hw = W / 2, hh = H / 2, cx = m.cx, cy = m.cy;
       const PX = (x, y) => hw + ((x - cx) * c - (y - cy) * s) * k;
@@ -126,12 +140,12 @@
       // land
       const bb = D.bbox;
       ctx.beginPath(); poly([bb[0], bb[1], bb[2], bb[1], bb[2], bb[3], bb[0], bb[3]], 0);
-      ctx.fillStyle = '#F4F3EF'; ctx.fill();
-      ctx.beginPath(); D.green.forEach((p) => poly(p, 0)); ctx.fillStyle = '#D3E8C4'; ctx.fill();
-      ctx.beginPath(); D.water.forEach((p) => poly(p, 0)); ctx.fillStyle = '#AFD5EC'; ctx.fill();
+      ctx.fillStyle = C.land; ctx.fill();
+      ctx.beginPath(); D.green.forEach((p) => poly(p, 0)); ctx.fillStyle = C.green; ctx.fill();
+      ctx.beginPath(); D.water.forEach((p) => poly(p, 0)); ctx.fillStyle = C.water; ctx.fill();
       // roads, thinnest first
       const W_ = [15, 10, 5.5, 7, 2.2];
-      const col = ['#FFFFFF', '#FFFFFF', '#FDFDFC', '#F7EFE2', '#FFFFFF'];
+      const col = [C.road0, C.road1, C.road2, C.road3, C.road0];
       const strokeCls = (cl, width, color) => {
         ctx.beginPath();
         for (const e of D.edges) {
@@ -143,12 +157,12 @@
         ctx.lineWidth = Math.max(0.6, width * k); ctx.strokeStyle = color; ctx.stroke();
       };
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      strokeCls(4, W_[4], 'rgba(255,255,255,0.9)');
-      [2, 3, 1, 0].forEach((cl) => strokeCls(cl, W_[cl] + 2.5, '#DCDDD8'));
+      strokeCls(4, W_[4], C.path);
+      [2, 3, 1, 0].forEach((cl) => strokeCls(cl, W_[cl] + 2.5, C.casing));
       [2, 3, 1, 0].forEach((cl) => strokeCls(cl, W_[cl], col[cl]));
       ctx.beginPath();
       D.rail.forEach((p) => { ctx.moveTo(PX(p[0], p[1]), PY(p[0], p[1], 0)); for (let i = 2; i < p.length; i += 2) ctx.lineTo(PX(p[i], p[i + 1]), PY(p[i], p[i + 1], 0)); });
-      ctx.lineWidth = Math.max(0.8, 2.2 * k); ctx.strokeStyle = '#B9BCC2'; ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.lineWidth = Math.max(0.8, 2.2 * k); ctx.strokeStyle = C.rail; ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash([]);
       // buildings
       const flat = m.tilt < 0.03;
       const vis = [];
@@ -161,7 +175,7 @@
       }
       if (flat) {
         ctx.beginPath(); vis.forEach((b) => poly(b.p, 0));
-        ctx.fillStyle = '#E1E3E6'; ctx.fill(); ctx.lineWidth = 0.6; ctx.strokeStyle = '#CDD0D5'; ctx.stroke();
+        ctx.fillStyle = C.flat; ctx.fill(); ctx.lineWidth = 0.6; ctx.strokeStyle = C.flatEdge; ctx.stroke();
       } else {
         vis.sort((a, b) => a.depth - b.depth);
         for (const b of vis) {
@@ -173,18 +187,18 @@
             const depthN = nx * s + ny * c;
             if (depthN <= 0) continue;
             const sx = (nx * c - ny * s) / (Math.hypot(nx, ny) || 1);
-            const l = Math.round(214 - sx * 22);
+            const l = C.wall[0] + sx * C.wall[1], t = C.wall[2];
             ctx.beginPath();
             ctx.moveTo(PX(p[2 * i], p[2 * i + 1]), PY(p[2 * i], p[2 * i + 1], 0));
             ctx.lineTo(PX(p[2 * j], p[2 * j + 1]), PY(p[2 * j], p[2 * j + 1], 0));
             ctx.lineTo(PX(p[2 * j], p[2 * j + 1]), PY(p[2 * j], p[2 * j + 1], z));
             ctx.lineTo(PX(p[2 * i], p[2 * i + 1]), PY(p[2 * i], p[2 * i + 1], z));
             ctx.closePath();
-            ctx.fillStyle = `rgb(${l},${l + 2},${l + 6})`; ctx.fill();
+            ctx.fillStyle = `rgb(${Math.round(l + t[0])},${Math.round(l + t[1])},${Math.round(l + t[2])})`; ctx.fill();
           }
           ctx.beginPath(); poly(p, z);
-          ctx.fillStyle = b.est ? '#F1F2F4' : '#F7F8FA'; ctx.fill();
-          ctx.lineWidth = 0.5; ctx.strokeStyle = '#C9CCD2'; ctx.stroke();
+          ctx.fillStyle = b.est ? C.roofEst : C.roof; ctx.fill();
+          ctx.lineWidth = 0.5; ctx.strokeStyle = C.roofEdge; ctx.stroke();
         }
       }
       // ---------- search overlay ----------
@@ -194,13 +208,13 @@
       if (st8.dOnly) {
         ctx.beginPath();
         for (const v of R.skipped) { const X = PX(D.nx[v], D.ny[v]), Y = PY(D.nx[v], D.ny[v], lift); ctx.moveTo(X + dotR, Y); ctx.arc(X, Y, dotR, 0, 6.2832); }
-        ctx.fillStyle = 'rgba(15,118,110,0.5)'; ctx.fill();
+        ctx.fillStyle = C.skipped; ctx.fill();
       }
       if (st8.aExp) {
         const shown = Math.min(R.A.order.length, Math.floor(el / tl.step) + 1);
         ctx.beginPath();
         for (let i = 0; i < shown; i++) { const v = R.A.order[i]; const X = PX(D.nx[v], D.ny[v]), Y = PY(D.nx[v], D.ny[v], lift); ctx.moveTo(X + dotR, Y); ctx.arc(X, Y, dotR, 0, 6.2832); }
-        ctx.fillStyle = 'rgba(29,78,216,0.62)'; ctx.fill();
+        ctx.fillStyle = C.explored; ctx.fill();
       }
       const drawLine = (ln, color, w, frac) => {
         if (!ln || frac <= 0) return;
@@ -216,12 +230,12 @@
           }
           ctx.lineTo(PX(x, y), PY(x, y, lift));
         }
-        ctx.lineWidth = w + 4; ctx.strokeStyle = '#FFFFFF'; ctx.stroke();
+        ctx.lineWidth = w + 4; ctx.strokeStyle = C.routeHalo; ctx.stroke();
         ctx.lineWidth = w; ctx.strokeStyle = color; ctx.stroke();
       };
       const pr = Math.max(0, Math.min(1, (el - tl.reveal) / 1300)), ease = 1 - Math.pow(1 - pr, 3);
-      if (st8.bfs) drawLine(R.bl, '#C2410C', 3.5, ease);
-      if (st8.best) drawLine(R.al, '#1D4ED8', 5, ease);
+      if (st8.bfs) drawLine(R.bl, C.bfs, 3.5, ease);
+      if (st8.best) drawLine(R.al, C.best, 5, ease);
       // marker travels the best route
       if (R.al && el > tl.drawEnd && st8.best) {
         const q = Math.min(1, (el - tl.drawEnd) / 2800), e2 = q < 0.5 ? 2 * q * q : 1 - Math.pow(-2 * q + 2, 2) / 2;
@@ -230,15 +244,15 @@
         const a = (target - R.al.cum[i - 1]) / (R.al.cum[i] - R.al.cum[i - 1] || 1);
         const x = R.al.pts[2 * i - 2] + (R.al.pts[2 * i] - R.al.pts[2 * i - 2]) * a, y = R.al.pts[2 * i - 1] + (R.al.pts[2 * i + 1] - R.al.pts[2 * i - 1]) * a;
         const X = PX(x, y), Y = PY(x, y, lift);
-        ctx.beginPath(); ctx.ellipse(X, Y + 2, 8, 3.5, 0, 0, 6.2832); ctx.fillStyle = 'rgba(21,24,29,0.2)'; ctx.fill();
-        ctx.beginPath(); ctx.arc(X, Y - 5, 6.5, 0, 6.2832); ctx.fillStyle = '#FFFFFF'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#1D4ED8'; ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(X, Y + 2, 8, 3.5, 0, 0, 6.2832); ctx.fillStyle = C.markerShadow; ctx.fill();
+        ctx.beginPath(); ctx.arc(X, Y - 5, 6.5, 0, 6.2832); ctx.fillStyle = C.marker; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.best; ctx.stroke();
       }
       // pins first
       const sp = [PX(D.nx[st8.start], D.ny[st8.start]), PY(D.nx[st8.start], D.ny[st8.start], lift)];
       const ep = [PX(D.nx[st8.end], D.ny[st8.end]), PY(D.nx[st8.end], D.ny[st8.end], lift)];
-      ctx.beginPath(); ctx.arc(sp[0], sp[1], 8, 0, 6.2832); ctx.fillStyle = '#FFFFFF'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#15181D'; ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(ep[0], ep[1]); ctx.lineTo(ep[0], ep[1] - 34); ctx.lineWidth = 2.4; ctx.strokeStyle = '#15181D'; ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(ep[0], ep[1] - 34); ctx.lineTo(ep[0] + 18, ep[1] - 27); ctx.lineTo(ep[0], ep[1] - 20); ctx.closePath(); ctx.fillStyle = '#15181D'; ctx.fill();
+      ctx.beginPath(); ctx.arc(sp[0], sp[1], 8, 0, 6.2832); ctx.fillStyle = C.pinFill; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.pin; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ep[0], ep[1]); ctx.lineTo(ep[0], ep[1] - 34); ctx.lineWidth = 2.4; ctx.strokeStyle = C.pin; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ep[0], ep[1] - 34); ctx.lineTo(ep[0] + 18, ep[1] - 27); ctx.lineTo(ep[0], ep[1] - 20); ctx.closePath(); ctx.fillStyle = C.pin; ctx.fill();
       // Then the pins' names, landmarks and streets, in that order. A label
       // that would overlap a pin, a label already placed or a control floating
       // over the map is left out (see ../shared/labels.js).
@@ -253,25 +267,26 @@
         ...MapLabels.controlBoxes(this.view.canvas, document.querySelectorAll('.overlay-top button, .overlay-zoom button')),
       ];
       const items = [
-        { txt: 'Start', font: F_PIN, color: '#15181D', candidates: [box(sp[0] + 13 + tw('Start', F_PIN) / 2, sp[1], 'Start', F_PIN, 15), box(sp[0] - 13 - tw('Start', F_PIN) / 2, sp[1], 'Start', F_PIN, 15)] },
-        { txt: 'Flag', font: F_PIN, color: '#15181D', candidates: [box(ep[0] + 22 + tw('Flag', F_PIN) / 2, ep[1] - 26, 'Flag', F_PIN, 15), box(ep[0] - 6 - tw('Flag', F_PIN) / 2, ep[1] - 26, 'Flag', F_PIN, 15)] },
+        { txt: 'Start', font: F_PIN, color: C.ink, candidates: [box(sp[0] + 13 + tw('Start', F_PIN) / 2, sp[1], 'Start', F_PIN, 15), box(sp[0] - 13 - tw('Start', F_PIN) / 2, sp[1], 'Start', F_PIN, 15)] },
+        { txt: 'Flag', font: F_PIN, color: C.ink, candidates: [box(ep[0] + 22 + tw('Flag', F_PIN) / 2, ep[1] - 26, 'Flag', F_PIN, 15), box(ep[0] - 6 - tw('Flag', F_PIN) / 2, ep[1] - 26, 'Flag', F_PIN, 15)] },
       ];
       const onScreen = (X, Y) => X > -40 && X < W + 40 && Y > -20 && Y < H + 20;
       D.pl.forEach(([nm, x, y]) => {
         const X = PX(x / 2, y / 2), Y = PY(x / 2, y / 2, nm === 'Adelaide Oval' ? 40 : 6);
-        if (onScreen(X, Y)) items.push({ txt: nm, font: F_PL, color: nm === 'River Torrens' ? '#245E7E' : '#15181D', candidates: [box(X, Y, nm, F_PL, 15), box(X, Y - 17, nm, F_PL, 15), box(X, Y + 17, nm, F_PL, 15)] });
+        if (onScreen(X, Y)) items.push({ txt: nm, font: F_PL, color: nm === 'River Torrens' ? C.river : C.ink, candidates: [box(X, Y, nm, F_PL, 15), box(X, Y - 17, nm, F_PL, 15), box(X, Y + 17, nm, F_PL, 15)] });
       });
       if (k > 0.33) D.st.forEach(([nm, x, y]) => {
         const X = PX(x / 2, y / 2), Y = PY(x / 2, y / 2, 0);
-        if (onScreen(X, Y)) items.push({ txt: nm, font: F_ST, color: '#5B6470', candidates: [box(X, Y, nm, F_ST, 13)] });
+        if (onScreen(X, Y)) items.push({ txt: nm, font: F_ST, color: C.street, candidates: [box(X, Y, nm, F_ST, 13)] });
       });
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.lineWidth = 4;
       for (const { item, box: b } of MapLabels.place(items, blockers, { x: 0, y: 0, w: W, h: H })) {
         const X = b.x + b.w / 2, Y = b.y + b.h / 2;
-        ctx.font = item.font; ctx.strokeStyle = item.font === F_ST ? 'rgba(255,255,255,0.9)' : 'rgba(246,247,243,0.95)'; ctx.strokeText(item.txt, X, Y);
+        ctx.font = item.font; ctx.strokeStyle = item.font === F_ST ? C.streetHalo : C.halo; ctx.strokeText(item.txt, X, Y);
         ctx.fillStyle = item.color; ctx.fillText(item.txt, X, Y);
       }
-      ctx.textAlign = 'right'; ctx.font = '500 11px Geist, -apple-system, system-ui, sans-serif'; ctx.fillStyle = 'rgba(21,24,29,0.6)';
+      ctx.textAlign = 'right'; ctx.font = '500 11px Geist, -apple-system, system-ui, sans-serif'; ctx.lineWidth = 4; ctx.strokeStyle = C.streetHalo; ctx.strokeText(ATTR, W - 10, H - 12);
+      ctx.fillStyle = C.attr;
       ctx.fillText(ATTR, W - 10, H - 12);
     }
     // A click on the map (X, Y in canvas pixels) moves a pin to the nearest junction.
@@ -288,7 +303,12 @@
     }
   }
 
-  fetch('data/adelaide_cbd.json')
+  // Size the map before the data arrives, so nothing jumps when it appears.
+  const mapHeight = (w) => Math.round(Math.min(Math.max(w * 0.66, 420), 760));
+  const sizeEarly = () => { const c = $('cv'); if (!window.app) c.style.height = mapHeight(c.parentElement.clientWidth) + 'px'; };
+  sizeEarly();
+  addEventListener('resize', sizeEarly);
+  fetch(DATA)
     .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then((raw) => { $('loading').remove(); window.app = new MapApp(raw); })
     .catch(() => { $('loading').textContent = 'Could not load the map data. Serve the docs folder over HTTP (python -m http.server) rather than opening the file directly.'; });

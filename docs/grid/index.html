@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pathfinder: how BFS, Dijkstra and A* search, on a grid</title>
+    <meta
+      name="description"
+      content="Watch BFS, Dijkstra and A* search hilly ground for the lowest-effort route, with every number from a real run."
+    />
+    <script src="../shared/theme.js?v=25"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
+    />
+    <link rel="stylesheet" href="../shared/theme.css?v=25" />
+    <link rel="stylesheet" href="styles.css?v=25" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <b>Pathfinder</b>
+        <a class="back" href="../">&larr; Back to the real map</a>
+      </div>
+      <nav class="nav-seg seg scroll-x" aria-label="Pages">
+        <a href="../">Adelaide CBD</a>
+        <span class="seg-label" aria-hidden="true">How it works</span>
+        <button type="button" data-nav="2d" aria-pressed="true">Grid 2D</button>
+        <button type="button" data-nav="3d" aria-pressed="false">Grid 3D</button>
+        <button type="button" data-nav="step" aria-pressed="false">Step through</button>
+      </nav>
+      <div class="top-controls scroll-x">
+        <label class="top-label" for="map">Map</label>
+        <select id="map"></select>
+        <button type="button" class="btn" id="shuffle" title="A new random map; the seed goes in the link">Shuffle</button>
+        <button type="button" class="btn theme-btn" data-theme-toggle aria-label="Theme: System" title="Cycle the theme: System, Light, Dark">
+          <svg class="i-system" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></svg>
+          <svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>
+          <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
+          <span data-theme-name>System</span>
+        </button>
+        <a class="gh" href="https://github.com/Agrim1305/Pathfinder">GitHub</a>
+      </div>
+    </header>
+
+    <div class="body">
+      <main class="stage" aria-label="Grid map">
+        <div class="map" id="mapbox">
+          <canvas
+            id="cv"
+            tabindex="0"
+            role="img"
+            aria-label="Map of the board: hills, the creek, the start and the flag, with what A* explored and both routes drawn on top. In Grid 3D, drag to turn it. Arrow keys move the map and the ring at its centre, Enter uses the selected tool on that cell, plus and minus zoom."
+          ></canvas>
+          <div class="overlay-top">
+            <div class="seg pill cam step-only" role="group" aria-label="Camera" hidden>
+              <button type="button" data-cam="2d" aria-pressed="true">2D</button>
+              <button type="button" data-cam="3d" aria-pressed="false">3D</button>
+            </div>
+            <div class="chips scroll-x compare-only" role="group" aria-label="Map layers">
+              <button type="button" class="chip" data-layer="explored" aria-pressed="true"><i class="sw sw-dot"></i>A* explored</button>
+              <button type="button" class="chip" data-layer="skipped" aria-pressed="false"><i class="sw sw-hatch"></i>Cells A* skipped</button>
+              <button type="button" class="chip" data-layer="bfs" aria-pressed="true"><i class="sw sw-dash"></i>BFS route</button>
+              <button type="button" class="chip" data-layer="best" aria-pressed="true"><i class="sw sw-line"></i>Best route</button>
+              <button type="button" class="chip" data-layer="numbers" aria-pressed="false"><i class="sw sw-num" aria-hidden="true">3</i>Elevation numbers</button>
+            </div>
+          </div>
+          <div class="overlay-zoom">
+            <button type="button" class="btn sq" id="zin" aria-label="Zoom in">+</button>
+            <button type="button" class="btn sq" id="zout" aria-label="Zoom out">&#8722;</button>
+            <button type="button" class="btn sq" id="fit" aria-label="Fit the board in view">
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" /></svg>
+            </button>
+          </div>
+          <div class="tip" id="tip" role="status" hidden></div>
+        </div>
+
+        <div class="legend step-only" aria-hidden="true" hidden>
+          <span><i class="lg-dot"></i>Expanded</span>
+          <span><i class="lg-ring"></i>In the queue</span>
+          <span><i class="lg-now"></i>Expanding now</span>
+          <span><i class="lg-ramp"></i>Elevation 0 to 9</span>
+        </div>
+        <div class="random-row" id="randomRow" hidden>
+          <span class="tools-label">Random map</span>
+          <label>Size <select id="rSize"><option value="14">14 by 14</option><option value="20">20 by 20</option><option value="28">28 by 28</option></select></label>
+          <label>Creeks <select id="rCreeks"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+          <label>Hills <select id="rHills"><option value="flat">Flat</option><option value="rolling">Rolling</option><option value="steep">Steep</option></select></label>
+          <span class="mono dim" id="rSeed"></span>
+        </div>
+        <div class="tools">
+          <span class="tools-label" id="tools-label">Click a cell to</span>
+          <div class="seg tool-seg scroll-x" role="group" aria-labelledby="tools-label">
+            <button type="button" data-tool="start" aria-pressed="true">Move start</button>
+            <button type="button" data-tool="end" aria-pressed="false">Move flag</button>
+            <button type="button" data-tool="creek" aria-pressed="false">Creek</button>
+            <button type="button" data-tool="raise" aria-pressed="false">Raise</button>
+            <button type="button" data-tool="lower" aria-pressed="false">Lower</button>
+          </div>
+          <button type="button" class="btn" id="resetPins">Reset pins</button>
+          <button type="button" class="btn" id="resetMap" hidden>Reset map</button>
+          <div class="style-pick">
+            <button type="button" class="btn" id="styleBtn" aria-expanded="false" aria-controls="styleMenu">
+              <span class="sws" id="styleSw" aria-hidden="true"></span><span id="styleName">Map style</span>
+            </button>
+            <div class="style-menu" id="styleMenu" role="group" aria-label="Map style" hidden></div>
+          </div>
+        </div>
+        <p class="hint" id="hint" aria-live="polite"></p>
+
+        <section class="card timeline" aria-label="Timeline">
+          <div class="tl-row">
+            <div class="tl-buttons">
+              <button type="button" class="btn sq" id="toStart" aria-label="Back to the start">
+                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M3 2h2v12H3zM14 2.5v11L6 8z" /></svg>
+              </button>
+              <button type="button" class="btn sq" id="prev" aria-label="Previous step">
+                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M11 2.5v11L3 8zM12 2h2v12h-2z" /></svg>
+              </button>
+              <button type="button" class="btn primary" id="play">Replay</button>
+              <button type="button" class="btn sq" id="next" aria-label="Next step">
+                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M5 2.5v11L13 8zM2 2h2v12H2z" /></svg>
+              </button>
+            </div>
+            <span class="mono dim" id="stepLabel"></span>
+          </div>
+          <input type="range" id="scrub" min="0" max="1" step="1" value="0" aria-label="Search step" />
+          <div class="spark-head compare-only">
+            <span>Queue size after each step. One step takes one node off a queue.</span>
+            <span id="peaks" class="peaks"></span>
+          </div>
+          <svg id="spark" class="spark compare-only" viewBox="0 0 600 56" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <div class="spark-flags compare-only" id="flags" aria-hidden="true"></div>
+        </section>
+      </main>
+
+      <aside class="side" aria-label="Results">
+        <div class="side-group step-only" hidden>
+          <section class="card step-card">
+            <div class="seg algo-seg" role="group" aria-label="Algorithm">
+              <button type="button" data-algo="bfs" aria-pressed="false">BFS</button>
+              <button type="button" data-algo="ucs" aria-pressed="false">Dijkstra</button>
+              <button type="button" data-algo="astar" aria-pressed="true">A*</button>
+            </div>
+            <p class="mono dim step-count" id="stepCount"></p>
+            <p class="step-sentence" id="stepSentence" aria-live="polite"></p>
+          </section>
+          <section class="card">
+            <div class="q-head"><h2>Queue</h2><span class="dim" id="qKind"></span></div>
+            <table class="queue" id="queue">
+              <thead><tr><th scope="col">#</th><th scope="col">Cell</th><th scope="col" class="num">g</th><th scope="col" class="num">h</th><th scope="col" class="num">f</th><th scope="col"><span class="visually-hidden">Note</span></th></tr></thead>
+              <tbody id="qBody"></tbody>
+            </table>
+            <p class="small dim" id="qNote"></p>
+          </section>
+          <section class="card code-card" aria-label="Pseudocode, with the lines this step runs highlighted">
+            <pre class="code" id="code"></pre>
+          </section>
+        </div>
+        <div class="side-group compare-only">
+        <section class="card">
+          <h1 id="headline">Finding routes…</h1>
+          <p id="summary"></p>
+        </section>
+        <section class="card results" id="results" aria-label="Results for each algorithm"></section>
+        <section class="card callout" id="callout" aria-live="polite"></section>
+        <section class="card">
+          <h2>Why A* can skip them</h2>
+          <p>
+            Each step costs at least 1, so the Manhattan distance to the flag never overestimates the real cost
+            left. A* uses it to rank cells, and the ones heading away from the flag never reach the front of the
+            queue.
+          </p>
+        </section>
+        </div>
+        <p class="foot">
+          The same searches as <code>pathfinder.py</code>, checked to give identical results on every bundled map.
+          Moving a pin or reshaping the ground runs all three again.
+        </p>
+      </aside>
+    </div>
+
+    <script src="../pathfinder.js?v=25"></script>
+    <script src="../maps.js?v=25"></script>
+    <script src="../terrain.js?v=25"></script>
+    <script src="../runs.js?v=25"></script>
+    <script src="../generate.js?v=25"></script>
+    <script src="../shared/view.js?v=25"></script>
+    <script src="../shared/labels.js?v=25"></script>
+    <script src="../shared/scroll.js?v=25"></script>
+    <script src="board.js?v=25"></script>
+    <script src="grid3d.js?v=25"></script>
+    <script src="app.js?v=25"></script>
+  </body>
+</html>
