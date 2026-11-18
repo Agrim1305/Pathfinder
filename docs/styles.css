@@ -363,20 +363,17 @@
   }
 }
 @media (max-width: 700px) {
-  .chips,
-  .tools {
+  .chips {
     flex-wrap: nowrap;
     overflow-x: auto;
-    scrollbar-width: none;
   }
   .overlay-top {
     right: 0;
   }
-  .chips {
-    padding-right: 14px;
-  }
-  .tools > * {
-    flex: none;
+  .tool-seg {
+    display: grid;
+    max-width: 100%;
+    overflow-x: auto;
   }
   .map canvas {
     cursor: default;

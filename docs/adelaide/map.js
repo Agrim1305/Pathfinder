@@ -35,6 +35,7 @@
       this.D = D;
       this.state = { aExp: true, dOnly: false, bfs: true, best: true, start: D.sp, end: D.ep, place: 'start', note: '' };
       this.t0 = 0;
+      this.widths = new Map(); // label widths, measured once per font and text
       this.reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
       this.res = AdelaideGraph.solve(D, D.sp, D.ep);
       this.bindControls();
@@ -232,31 +233,46 @@
         ctx.beginPath(); ctx.ellipse(X, Y + 2, 8, 3.5, 0, 0, 6.2832); ctx.fillStyle = 'rgba(21,24,29,0.2)'; ctx.fill();
         ctx.beginPath(); ctx.arc(X, Y - 5, 6.5, 0, 6.2832); ctx.fillStyle = '#FFFFFF'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#1D4ED8'; ctx.stroke();
       }
-      // labels
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const label = (txt, x, y, z, font, color, halo) => {
-        const X = PX(x, y), Y = PY(x, y, z);
-        if (X < -40 || X > W + 40 || Y < -20 || Y > H + 20) return;
-        ctx.font = font; ctx.lineWidth = 4; ctx.strokeStyle = halo; ctx.lineJoin = 'round'; ctx.strokeText(txt, X, Y); ctx.fillStyle = color; ctx.fillText(txt, X, Y);
-      };
-      if (k > 0.33) D.st.forEach(([nm, x, y]) => label(nm, x / 2, y / 2, 0, '500 11px Geist, -apple-system, system-ui, sans-serif', '#5B6470', 'rgba(255,255,255,0.9)'));
-      D.pl.forEach(([nm, x, y]) => label(nm, x / 2, y / 2, nm === 'Adelaide Oval' ? 40 : 6, '650 12.5px Geist, -apple-system, system-ui, sans-serif', nm === 'River Torrens' ? '#245E7E' : '#15181D', 'rgba(246,247,243,0.95)'));
-      // pins
-      const pin = (v, kind) => {
-        const X = PX(D.nx[v], D.ny[v]), Y = PY(D.nx[v], D.ny[v], lift);
-        ctx.textAlign = 'left'; ctx.font = '650 13px Geist, -apple-system, system-ui, sans-serif';
-        if (kind === 'start') {
-          ctx.beginPath(); ctx.arc(X, Y, 8, 0, 6.2832); ctx.fillStyle = '#FFFFFF'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#15181D'; ctx.stroke();
-          ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(246,247,243,0.95)'; ctx.strokeText('Start', X + 13, Y); ctx.fillStyle = '#15181D'; ctx.fillText('Start', X + 13, Y);
-        } else {
-          ctx.beginPath(); ctx.moveTo(X, Y); ctx.lineTo(X, Y - 34); ctx.lineWidth = 2.4; ctx.strokeStyle = '#15181D'; ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(X, Y - 34); ctx.lineTo(X + 18, Y - 27); ctx.lineTo(X, Y - 20); ctx.closePath(); ctx.fillStyle = '#15181D'; ctx.fill();
-          ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(246,247,243,0.95)'; ctx.strokeText('Flag', X + 22, Y - 26); ctx.fillStyle = '#15181D'; ctx.fillText('Flag', X + 22, Y - 26);
-        }
-      };
-      pin(st8.start, 'start'); pin(st8.end, 'end');
+      // pins first
+      const sp = [PX(D.nx[st8.start], D.ny[st8.start]), PY(D.nx[st8.start], D.ny[st8.start], lift)];
+      const ep = [PX(D.nx[st8.end], D.ny[st8.end]), PY(D.nx[st8.end], D.ny[st8.end], lift)];
+      ctx.beginPath(); ctx.arc(sp[0], sp[1], 8, 0, 6.2832); ctx.fillStyle = '#FFFFFF'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#15181D'; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ep[0], ep[1]); ctx.lineTo(ep[0], ep[1] - 34); ctx.lineWidth = 2.4; ctx.strokeStyle = '#15181D'; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ep[0], ep[1] - 34); ctx.lineTo(ep[0] + 18, ep[1] - 27); ctx.lineTo(ep[0], ep[1] - 20); ctx.closePath(); ctx.fillStyle = '#15181D'; ctx.fill();
+      // Then the pins' names, landmarks and streets, in that order. A label
+      // that would overlap a pin, a label already placed or a control floating
+      // over the map is left out (see ../shared/labels.js).
+      const F_PIN = '650 13px Geist, -apple-system, system-ui, sans-serif', F_PL = '650 12.5px Geist, -apple-system, system-ui, sans-serif', F_ST = '500 11px Geist, -apple-system, system-ui, sans-serif';
+      const ATTR = 'Map data © OpenStreetMap contributors';
+      const tw = (txt, font) => { const key = font + txt; if (!this.widths.has(key)) { ctx.font = font; this.widths.set(key, ctx.measureText(txt).width); } return this.widths.get(key); };
+      const box = (x, y, txt, font, h) => MapLabels.around(x, y, tw(txt, font), h);
+      const blockers = [
+        { x: sp[0] - 10, y: sp[1] - 10, w: 20, h: 20 },
+        { x: ep[0] - 3, y: ep[1] - 36, w: 22, h: 38 },
+        { x: W - 14 - tw(ATTR, F_ST), y: H - 22, w: tw(ATTR, F_ST) + 8, h: 18 },
+        ...MapLabels.controlBoxes(this.view.canvas, document.querySelectorAll('.overlay-top button, .overlay-zoom button')),
+      ];
+      const items = [
+        { txt: 'Start', font: F_PIN, color: '#15181D', candidates: [box(sp[0] + 13 + tw('Start', F_PIN) / 2, sp[1], 'Start', F_PIN, 15), box(sp[0] - 13 - tw('Start', F_PIN) / 2, sp[1], 'Start', F_PIN, 15)] },
+        { txt: 'Flag', font: F_PIN, color: '#15181D', candidates: [box(ep[0] + 22 + tw('Flag', F_PIN) / 2, ep[1] - 26, 'Flag', F_PIN, 15), box(ep[0] - 6 - tw('Flag', F_PIN) / 2, ep[1] - 26, 'Flag', F_PIN, 15)] },
+      ];
+      const onScreen = (X, Y) => X > -40 && X < W + 40 && Y > -20 && Y < H + 20;
+      D.pl.forEach(([nm, x, y]) => {
+        const X = PX(x / 2, y / 2), Y = PY(x / 2, y / 2, nm === 'Adelaide Oval' ? 40 : 6);
+        if (onScreen(X, Y)) items.push({ txt: nm, font: F_PL, color: nm === 'River Torrens' ? '#245E7E' : '#15181D', candidates: [box(X, Y, nm, F_PL, 15), box(X, Y - 17, nm, F_PL, 15), box(X, Y + 17, nm, F_PL, 15)] });
+      });
+      if (k > 0.33) D.st.forEach(([nm, x, y]) => {
+        const X = PX(x / 2, y / 2), Y = PY(x / 2, y / 2, 0);
+        if (onScreen(X, Y)) items.push({ txt: nm, font: F_ST, color: '#5B6470', candidates: [box(X, Y, nm, F_ST, 13)] });
+      });
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.lineWidth = 4;
+      for (const { item, box: b } of MapLabels.place(items, blockers, { x: 0, y: 0, w: W, h: H })) {
+        const X = b.x + b.w / 2, Y = b.y + b.h / 2;
+        ctx.font = item.font; ctx.strokeStyle = item.font === F_ST ? 'rgba(255,255,255,0.9)' : 'rgba(246,247,243,0.95)'; ctx.strokeText(item.txt, X, Y);
+        ctx.fillStyle = item.color; ctx.fillText(item.txt, X, Y);
+      }
       ctx.textAlign = 'right'; ctx.font = '500 11px Geist, -apple-system, system-ui, sans-serif'; ctx.fillStyle = 'rgba(21,24,29,0.6)';
-      ctx.fillText('Map data © OpenStreetMap contributors', W - 10, H - 12);
+      ctx.fillText(ATTR, W - 10, H - 12);
     }
     // A click on the map (X, Y in canvas pixels) moves a pin to the nearest junction.
     pick(X, Y) {

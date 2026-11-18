@@ -114,6 +114,24 @@ button {
   white-space: nowrap;
 }
 
+/* Rows that scroll sideways (see scroll.js) fade out on the edge with more. */
+.scroll-x {
+  --fade-l: 0px;
+  --fade-r: 0px;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent 100%);
+  scrollbar-width: none;
+}
+.scroll-x::-webkit-scrollbar {
+  display: none;
+}
+.scroll-x[data-more~="left"] {
+  --fade-l: 32px;
+}
+.scroll-x[data-more~="right"] {
+  --fade-r: 32px;
+}
+
 /* ---------- shared header ---------- */
 .top {
   display: flex;
@@ -177,7 +195,7 @@ button {
   justify-content: center;
   gap: 6px;
   min-height: 34px;
-  padding: 0 14px;
+  padding: 7px 14px;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -206,8 +224,19 @@ button {
   width: 18px;
   height: 18px;
 }
-:root[data-theme="dark"] .i-moon,
-:root:not([data-theme="dark"]) .i-sun {
+/* The theme button shows the current choice: System, Light or Dark. */
+.theme-btn {
+  padding: 7px 12px;
+  border-radius: 10px;
+}
+.theme-btn svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+:root:not([data-theme-choice="system"]) .i-system,
+:root:not([data-theme-choice="light"]) .i-sun,
+:root:not([data-theme-choice="dark"]) .i-moon {
   display: none;
 }
 .gh {
@@ -298,7 +327,6 @@ button {
     width: 100%;
     flex-wrap: nowrap;
     overflow-x: auto;
-    scrollbar-width: none;
     padding-bottom: 2px;
   }
   .top-controls > * {

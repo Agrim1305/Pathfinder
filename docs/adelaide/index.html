@@ -7,7 +7,7 @@
 <meta name="description" content="BFS, Dijkstra and A* on the real Adelaide city centre walking network, in 2D and 3D, built from OpenStreetMap data.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=13">
 </head>
 <body>
 <header class="top">
@@ -25,7 +25,7 @@
         aria-label="Map of Adelaide city centre from OpenStreetMap, with real building shapes and heights. The start and flag pins, the area A* explored and the routes are drawn on top. Arrow keys pan, plus and minus zoom."></canvas>
       <p class="loading" id="loading">Loading the map…</p>
       <div class="overlay-top">
-        <div role="group" aria-label="Map layers" class="chips">
+        <div role="group" aria-label="Map layers" class="chips scroll-x">
           <button type="button" class="chip glass" data-layer="aExp" aria-pressed="true"><i class="sw sw-dot a"></i>A* explored</button>
           <button type="button" class="chip glass" data-layer="dOnly" aria-pressed="false"><i class="sw sw-dot d"></i>Junctions A* skipped</button>
           <button type="button" class="chip glass" data-layer="bfs" aria-pressed="true"><i class="sw sw-line b"></i>BFS route</button>
@@ -78,8 +78,10 @@
     </section>
   </aside>
 </div>
-<script src="graph.js"></script>
-<script src="../shared/view.js"></script>
-<script src="map.js"></script>
+<script src="graph.js?v=13"></script>
+<script src="../shared/view.js?v=13"></script>
+<script src="../shared/labels.js?v=13"></script>
+<script src="../shared/scroll.js?v=13"></script>
+<script src="map.js?v=13"></script>
 </body>
 </html>

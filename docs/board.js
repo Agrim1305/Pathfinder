@@ -240,48 +240,72 @@
       ctx.stroke();
     }
 
-    for (const L of s.labels || []) {
-      const [X, Y] = P(L.u, L.v, L.lift || 0);
-      if (L.leader) {
+    // Pins first: a dashed ring for the start, a flag for the goal.
+    const pinR = Math.max(7, Math.min(15, cellPx * 0.3));
+    const [sx, sy] = centre(s.start, 0.05);
+    ctx.beginPath();
+    ctx.arc(sx, sy, pinR, 0, 2 * Math.PI);
+    ctx.setLineDash([4, 3]);
+    ctx.lineWidth = 2.2;
+    ctx.strokeStyle = ink;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const [fx, fy] = centre(s.end, 0.05), fh = Math.max(20, Math.min(34, cellPx * 0.8));
+    ctx.beginPath();
+    ctx.moveTo(fx, fy + 2);
+    ctx.lineTo(fx, fy - fh);
+    ctx.lineWidth = 2.4;
+    ctx.strokeStyle = ink;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(fx, fy - fh);
+    ctx.lineTo(fx + fh * 0.55, fy - fh * 0.78);
+    ctx.lineTo(fx, fy - fh * 0.56);
+    ctx.closePath();
+    ctx.fillStyle = ink;
+    ctx.fill();
+
+    // Then the pins' names, then map labels. A label goes in its first spot
+    // that overlaps no pin, no label already placed, no control floating over
+    // the map and no A* dot; with no free spot it is left out.
+    const blockers = [
+      { x: sx - pinR - 2, y: sy - pinR - 2, w: 2 * pinR + 4, h: 2 * pinR + 4 },
+      { x: fx - 3, y: fy - fh - 2, w: fh * 0.6 + 6, h: fh + 6 },
+      ...(s.controls || []),
+    ];
+    if (s.layers.explored)
+      A.closeStep.forEach((step, k) => {
+        if (step < 0) return;
+        const [X, Y] = centre([Math.floor(k / cols), k % cols], 0.02);
+        blockers.push({ x: X - dot, y: Y - dot, w: 2 * dot, h: 2 * dot });
+      });
+    const font = `650 12px ${FONT}`;
+    ctx.font = font;
+    const at = (x, y, txt) => MapLabels.around(x, y, ctx.measureText(txt).width, 14);
+    const sw = ctx.measureText("Start").width / 2, fw = ctx.measureText("Flag").width / 2;
+    const items = [
+      { text: "Start", candidates: [at(sx + pinR + 6 + sw, sy, "Start"), at(sx - pinR - 6 - sw, sy, "Start"), at(sx, sy + pinR + 12, "Start"), at(sx, sy - pinR - 12, "Start")] },
+      { text: "Flag", candidates: [at(fx + fh * 0.6 + 6 + fw, fy - fh * 0.66, "Flag"), at(fx - 6 - fw, fy - fh * 0.66, "Flag"), at(fx, fy + 14, "Flag")] },
+      ...(s.labels || []).map((L) => ({
+        L,
+        text: L.text,
+        candidates: L.at.map(([u, v]) => {
+          const [X, Y] = P(u, v, L.lift || 0);
+          return at(X, L.leader ? Y - 34 : Y, L.text);
+        }),
+      })),
+    ];
+    for (const { item, box } of MapLabels.place(items, blockers, { x: 0, y: 0, w: W, h: H })) {
+      const X = box.x + box.w / 2, Y = box.y + box.h / 2, L = item.L;
+      if (L && L.leader) {
         ctx.beginPath();
-        ctx.moveTo(X, Y);
-        ctx.lineTo(X, Y - 26);
+        ctx.moveTo(X, Y + 34);
+        ctx.lineTo(X, box.y + box.h);
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = ink;
         ctx.stroke();
       }
-      label(L.text, X, L.leader ? Y - 34 : Y, `600 12px ${FONT}`, L.water ? (st.dark ? "#9CC9EA" : "#245E7E") : ink);
-    }
-
-    // Pins: a dashed ring for the start, a flag for the goal.
-    const pinR = Math.max(7, Math.min(15, cellPx * 0.3));
-    {
-      const [X, Y] = centre(s.start, 0.05);
-      ctx.beginPath();
-      ctx.arc(X, Y, pinR, 0, 2 * Math.PI);
-      ctx.setLineDash([4, 3]);
-      ctx.lineWidth = 2.2;
-      ctx.strokeStyle = ink;
-      ctx.stroke();
-      ctx.setLineDash([]);
-      label("Start", X + pinR + 4, Y, `650 12px ${FONT}`, ink, "left");
-    }
-    {
-      const [X, Y] = centre(s.end, 0.05), h = Math.max(20, Math.min(34, cellPx * 0.8));
-      ctx.beginPath();
-      ctx.moveTo(X, Y + 2);
-      ctx.lineTo(X, Y - h);
-      ctx.lineWidth = 2.4;
-      ctx.strokeStyle = ink;
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(X, Y - h);
-      ctx.lineTo(X + h * 0.55, Y - h * 0.78);
-      ctx.lineTo(X, Y - h * 0.56);
-      ctx.closePath();
-      ctx.fillStyle = ink;
-      ctx.fill();
-      label("Flag", X + h * 0.6, Y - h * 0.62, `650 12px ${FONT}`, ink, "left");
+      label(item.text, X, Y, font, L && L.water ? (st.dark ? "#9CC9EA" : "#245E7E") : ink);
     }
 
     // The cell under the pointer, and the keyboard cursor at the centre.

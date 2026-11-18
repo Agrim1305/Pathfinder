@@ -40,3 +40,5 @@ jobs:
         run: node tests/test_layers.js
       - name: Check colour contrast in both themes
         run: node tests/test_contrast.js
+      - name: Check map labels never overlap
+        run: node tests/test_labels.js

@@ -11,7 +11,7 @@ button:active{transform:scale(.97)}
 .brand a{font-size:18px;font-weight:700;letter-spacing:-.02em;text-decoration:none}
 .brand span{font-size:12.5px;color:var(--dim)}
 .seg{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:2px;padding:2px;background:rgba(21,24,29,.07);border-radius:10px}
-.seg>*{display:flex;align-items:center;justify-content:center;min-height:34px;padding:0 14px;border:0;border-radius:8px;background:transparent;font-size:13px;font-weight:600;text-decoration:none}
+.seg>*{display:flex;align-items:center;justify-content:center;min-height:34px;padding:7px 14px;border:0;border-radius:8px;background:transparent;font-size:13px;font-weight:600;text-decoration:none}
 .seg>[aria-current],.seg>[aria-pressed="true"]{background:#fff;box-shadow:0 1px 3px rgba(21,24,29,.16)}
 .seg.pill{border-radius:999px;background:rgba(255,255,255,.7);border:1px solid rgba(21,24,29,.1)}
 .seg.pill>*{border-radius:999px;min-height:32px}
@@ -60,3 +60,7 @@ button:active{transform:scale(.97)}
 @media (prefers-reduced-motion:reduce){button{transition:none}button:active{transform:none}}
 @media (prefers-reduced-transparency:reduce){.glass{backdrop-filter:none;-webkit-backdrop-filter:none;background:#fff}}
 .seg.pill>[aria-pressed="true"]{background:var(--ink);color:#fff;box-shadow:none}
+/* Below 1200 px the layer chips and the 2D/3D and Replay controls move into a bar above the map. */
+@media (max-width:1199px){.map{display:flex;flex-direction:column}.overlay-top{position:static;order:-1;padding:10px 12px;border-bottom:1px solid var(--line);background:#fff}.chips{flex:1 1 320px;min-width:0;flex-wrap:nowrap;overflow-x:auto}.chip{flex:none}.right{flex:none}.overlay-top .glass{backdrop-filter:none;-webkit-backdrop-filter:none}}
+/* Rows that scroll sideways fade out on the edge with more (../shared/scroll.js). Moves to shared/theme.css with the rest of this page in Phase 6. */
+.scroll-x{--fade-l:0px;--fade-r:0px;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 var(--fade-l),#000 calc(100% - var(--fade-r)),transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 var(--fade-l),#000 calc(100% - var(--fade-r)),transparent 100%);scrollbar-width:none}.scroll-x::-webkit-scrollbar{display:none}.scroll-x[data-more~="left"]{--fade-l:32px}.scroll-x[data-more~="right"]{--fade-r:32px}

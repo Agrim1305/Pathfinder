@@ -83,14 +83,21 @@
     renderTools();
   }
 
-  // "Creek, impassable" on the creek cell nearest the middle of the creek.
+  // "Creek, impassable" goes over the creek itself: its candidate spots are the
+  // creek cells and the gaps between neighbouring ones, nearest the middle first.
   function creekLabel() {
-    const cells = [];
-    S.grid.forEach((row, r) => row.forEach((v, c) => v === -1 && cells.push([r, c])));
+    const g = S.grid, cells = [];
+    g.forEach((row, r) => row.forEach((v, c) => v === -1 && cells.push([r, c])));
     if (!cells.length) return [];
     const mr = cells.reduce((a, [r]) => a + r, 0) / cells.length, mc = cells.reduce((a, [, c]) => a + c, 0) / cells.length;
-    const [r, c] = cells.reduce((b, x) => ((x[0] - mr) ** 2 + (x[1] - mc) ** 2 < (b[0] - mr) ** 2 + (b[1] - mc) ** 2 ? x : b));
-    return [{ text: "Creek, impassable", u: c + 0.5, v: r + 0.5, water: true }];
+    const spots = [];
+    for (const [r, c] of cells) {
+      spots.push([c + 0.5, r + 0.5]);
+      if (g[r][c + 1] === -1) spots.push([c + 1, r + 0.5]);
+      if (g[r + 1] && g[r + 1][c] === -1) spots.push([c + 0.5, r + 1]);
+    }
+    spots.sort((a, b) => (a[0] - mc - 0.5) ** 2 + (a[1] - mr - 0.5) ** 2 - ((b[0] - mc - 0.5) ** 2 + (b[1] - mr - 0.5) ** 2));
+    return [{ text: "Creek, impassable", water: true, at: spots.slice(0, 60) }];
   }
 
   function loadMap(name, keep = {}) {
@@ -249,6 +256,7 @@
       k: stepAt(S.t), routeFrac: clamp01(after / DRAW_MS), walkFrac: clamp01((after - DRAW_MS) / WALK_MS),
       style: S.style, fromStyle: S.fromStyle, fade,
       layers: S.layers, hover: S.hover, focus: S.focus,
+      controls: MapLabels.controlBoxes(view.canvas, document.querySelectorAll("#mapbox .chip, #mapbox .overlay-zoom .btn")),
     });
     if (S.hover || S.focus) placeTip();
     return busy;
@@ -313,9 +321,12 @@
     scrub.max = tm.N;
     scrub.value = k;
     const after = S.t - tm.searchEnd;
-    $("stepLabel").textContent = `Step ${fmt(k)} of ${fmt(tm.N)}` +
+    // The timeline is as long as the longest search; say which one that is.
+    const longest = Runs.ALGOS.filter((a) => R[a].nodes === tm.N).map((a) => R[a].name).join(" and ");
+    const of = `Step ${fmt(k)} of ${fmt(tm.N)} (longest search: ${longest})`;
+    $("stepLabel").textContent = of +
       (after > 0 && after < DRAW_MS ? ". Drawing the routes." : after >= DRAW_MS && S.t < tm.total ? ". Walking the best route." : "");
-    scrub.setAttribute("aria-valuetext", `Step ${k} of ${tm.N}`);
+    scrub.setAttribute("aria-valuetext", of);
     $("play").textContent = S.playing ? "Pause" : S.t >= tm.total ? "Replay" : "Play";
     $("prev").disabled = $("toStart").disabled = S.t <= 0;
     $("next").disabled = S.t >= tm.total;
