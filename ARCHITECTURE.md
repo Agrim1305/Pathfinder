@@ -14,6 +14,105 @@
 - `docs/grid/` is the grid demo (Grid 2D, Grid 3D and Step through). Both are static pages
   with no build step, served by GitHub Pages from `docs/`.
 
+No page has a build step or a runtime dependency. Every script is a plain file that a page
+loads with a `<script>` tag. The ones with pure logic also export themselves for Node, so the
+tests run the exact code the pages run. Local files carry a version query (`app.js?v=25`),
+bumped on every change, so a browser never mixes a cached old file with a new one.
+
+## Shared code: `docs/shared/`
+
+- **Camera, `view.js`.** Both maps use one camera, `{ th, tilt, k, cx, cy }`: turn, tilt (0
+  is flat with north up), pixels per world unit and the world point at the centre. `P(x, y,
+  z)` projects a world point to the canvas and `unP(X, Y)` takes a canvas pixel back to the
+  ground. It handles dragging (turn in 3D, slide in 2D or with Shift), wheel and two-finger
+  pinch zoom around the pointer, arrow keys and + and -, a little turning momentum, 650 ms
+  ease-out tweens between 2D and 3D, framing a set of points, and HiDPI sizing with a
+  ResizeObserver. Its animation loop only runs while something moves. A page can take over a
+  press with `grab()`, which the grid uses for dragging pins and painting cells.
+  `tests/test_view.js` checks the maths in Node.
+- **Labels, `labels.js`.** Labels are placed in priority order: pins, then landmarks, then
+  streets. Each label takes its first candidate spot that overlaps no label already placed,
+  no pin, no control floating over the map and no edge of the canvas; with no free spot it is
+  left out. `tests/test_labels.js` checks that placed boxes never overlap.
+- **Theme, `theme.css` and `theme.js`.** One set of colour tokens with light and dark values
+  for both pages. `theme.js` runs in `<head>`, so the right theme is set before the first
+  paint. It follows the system until the header button picks Light or Dark, remembers the
+  choice in localStorage and the URL hash, and fades colours for 300 ms (at once under
+  reduced motion). The canvases listen and fade their own palettes. `tests/test_contrast.js`
+  checks every text and control colour, and the map label colours, against WCAG AA.
+- **`scroll.js`** marks rows that scroll sideways on narrow screens, so CSS can fade out the
+  edge with more to see.
+
+## The grid demo: `docs/grid/`
+
+### Terrain model: `docs/terrain.js`
+
+The search runs on the exact grid values; the terrain is only for display. Impassable cells
+become a creek: each takes the average height of the dry ground around it, so it follows the
+land instead of leaving a pit. The heightfield samples each cell 3 times per side, blends the
+four nearest cell centres, and softens the result with two passes of a 3x3 blur. Then it
+carves the water: every water vertex sits a fixed depth below the lowest dry vertex beside it,
+after the blur, so the banks stay crisp and slope down inside the creek cells. Hillshade comes
+from a light at the top left, and contour lines at every whole height come from marching
+squares over the heightfield. The four map styles (Terrain, Topo, Clay, Night) are colour
+functions of height, light and water, plus a few tokens each. `tests/test_terrain.js` checks
+that it is deterministic, that water sits below the ground beside it, that contour points lie
+on their level, and that every style gives valid colours.
+
+### One renderer, flat or tilted
+
+`board.js` draws everything on top of the ground through the shared camera: the search
+layers, routes, marker, pins and labels. Every point sits on the terrain surface, so the same
+code works flat or tilted. For the ground itself it calls `grid3d.js` whenever the camera is
+tilted, and otherwise draws one cached image of the shaded terrain. So switching between Grid
+2D and Grid 3D is just a camera tween on the same canvas, and keeps the run, the pins and the
+timeline.
+
+`grid3d.js` uses the painter's algorithm: the heightfield's sub-quads are sorted back to
+front by their depth after turning and drawn in that order, with the survey grid and contour
+lines stroked as it goes, so a hill hides the lines behind it. The model sits on a diorama
+base with sides in soil colour and a soft shadow underneath. While the camera moves, it draws
+one quad per cell instead of nine and drops the contours, and the full detail returns 150 ms
+after the camera stops, the usual detail-while-moving trick: on the 20 by 20 map that is 60
+fps while turning, against 55 fps with full detail.
+
+### Why 3D follows the timeline instead of its own clock
+
+There is one clock: the timeline in `app.js`. Each frame works out how far along it is (how
+many steps of the search, how much of the routes, how far the marker has walked) and the
+renderer draws that state. The 3D view has no animation of its own, so pausing, stepping and
+scrubbing work the same in 2D and 3D, switching views never restarts anything, and reduced
+motion only has to jump the one clock to the end.
+
+### Why canvas 2D instead of WebGL
+
+WebGL would need either a library such as Three.js or a few hundred lines of shader and
+buffer code, against the rule of no runtime dependencies and no build step. The scenes are
+small: at most 28 by 28 cells, or 7,056 sub-quads, and the Adelaide map's few thousand
+buildings. Canvas 2D draws them fast enough, it already draws the text, routes and labels,
+and the same code runs on every browser without a GPU context to lose.
+
+### Step through and the trace
+
+`search()` in `docs/pathfinder.js` takes an optional trace array. For every node taken off
+the queue it records the node, its g and f, whether it was stale or the goal, how many
+neighbours it pushed or skipped, the queue size and the next few entries in the queue. It
+only reads the search's state, and `tests/test_trace.js` checks that every map and algorithm
+gives the same path, cost, visit order and node count with the trace on and off. `runs.js`
+turns the traces into what the page shows: costs, nodes taken off the queue (stale ones
+included) and distinct cells, the cells A\* skipped, the headline, and `frontierAt()`, which
+rebuilds the whole queue at any step by replaying the trace. `tests/test_layers.js` checks
+these numbers, including the queue size at every step.
+
+### Random maps: `docs/generate.js`
+
+Maps come from a seed and use mulberry32, a small 32-bit generator, for every random choice,
+never `Math.random`, so a link with `seed=` reproduces the map exactly. Ground is the sum of 1
+to 3 smooth hills; creeks are channels one cell wide that start at an edge and wander inward
+without touching another creek. The pins go on the dry cells nearest opposite corners, and if
+they are not connected the next seed is tried and the link records the seed actually used.
+`tests/test_generate.js` checks 1,500 maps.
+
 ## Adelaide CBD pipeline
 
 The map data goes through two scripts before the browser sees it. Both live in `tools/`, and
@@ -85,3 +184,11 @@ line between a segment's ends can never be longer than a path through those same
 (the triangle inequality), so the heuristic is consistent by construction.
 `test_heuristic_is_consistent` checks every segment. The data file still carries the old
 length (tenths of a metre, unrounded) in each segment's third field; `graph.js` ignores it.
+
+### 5. The page
+
+`docs/index.html` loads the map data with `<link rel="preload">`, so it downloads alongside
+the scripts, and sizes the map before the data arrives, so nothing jumps when it appears.
+`docs/adelaide/palette.js` holds the map's light and dark colours; the page fades between
+them with the theme. `docs/adelaide/index.html` forwards old links to the front page, and the
+front page sends old grid links (`#view=`, `#map=`) on to `grid/`.

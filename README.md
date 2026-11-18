@@ -6,13 +6,62 @@ Finds the lowest-effort route across terrain with hills and obstacles, and shows
 choice of search algorithm matters. BFS, Dijkstra (Uniform Cost Search) and A\* are
 implemented from scratch in Python with no external dependencies.
 
-**[Try it in your browser](https://agrim1305.github.io/Pathfinder/)**: the site opens on the real walking network of Adelaide's city centre. Its **[grid demo](https://agrim1305.github.io/Pathfinder/grid/)** shows how the searches work: BFS, Dijkstra and A\* search the same hilly map, and a timeline lets you scrub through every step. Hover any cell for its real g, h and f. Move the start and the flag, dig or fill the creek, raise or lower the ground, and all three searches run again. The page opens on `maps/detour.txt`, the map behind the figures below, and `python benchmark.py` reproduces them. The browser version is a JavaScript copy of the same algorithms, and CI checks it gives identical results to the Python code on every map. Light and dark themes follow your system, with a toggle in the header.
+**[Try it in your browser](https://agrim1305.github.io/Pathfinder/)**: the site opens on the real walking network of Adelaide's city centre, and its **[grid demo](https://agrim1305.github.io/Pathfinder/grid/)** shows how the searches work, step by step. The four views are below. The grid demo opens on `maps/detour.txt`, the map behind the figures further down, and `python benchmark.py` reproduces them. The browser version is a JavaScript copy of the same algorithms, and CI checks it gives identical results to the Python code on every map.
 
 **The short version:** counting steps is not enough. On the demo map, BFS (which only
 counts steps) walks straight over a hill and pays **35% more effort** than the best route of
 the same length, and A\* finds that best route while expanding **59% fewer nodes** than Dijkstra.
 
 ![Both routes take 26 steps; the BFS route (orange) goes over the hill, the lowest-effort route (blue) goes around it](docs/routes.png)
+
+## Four views
+
+Every number on screen comes from a real run of the three searches. Light and dark themes
+follow your system, and the button in the header cycles System, Light and Dark.
+
+**Adelaide CBD**, the front page: BFS, Dijkstra and A\* on the real walking network, in 2D
+or 3D. Click the map to move the start or the flag.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/adelaide-dark.png">
+  <img alt="Adelaide CBD in 3D: the BFS route uses fewer street segments but walks 484 m further than the shortest route" src="docs/screenshots/adelaide-light.png">
+</picture>
+
+**Grid 2D**: the same searches on a hilly grid. Scrub through every step, hover a cell for
+its real g, h and f, turn on "Cells A\* skipped" to see what the heuristic saves, move the
+pins, dig or fill the creek, and pick a bundled map or shuffle a random one from a seed.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/grid-2d-dark.png">
+  <img alt="Grid 2D on the detour map: BFS climbs the hill, A* goes around it and takes 59% fewer nodes off the queue than Dijkstra" src="docs/screenshots/grid-2d-light.png">
+</picture>
+
+**Grid 3D**: the same run and timeline on a lit terrain model, here in the Topo map style.
+Drag to turn it; the map style picker offers Terrain, Topo, Clay and Night.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/grid-3d-dark.png">
+  <img alt="Grid 3D in the Topo style: contour lines on the hill, the creek sunk into the ground, and both routes on the surface" src="docs/screenshots/grid-3d-light.png">
+</picture>
+
+**Step through**: one search, one step at a time. The queue after each step, with the entry
+that comes out next and the stale copies that lazy deletion leaves behind, and the lines of
+pseudocode that step ran.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/step-through-dark.png">
+  <img alt="Step through at step 40 of A*: the queue table marks a stale copy of the cell just expanded and the next entry out" src="docs/screenshots/step-through-light.png">
+</picture>
+
+### Run it locally
+
+The pages load their data over HTTP, so serve `docs/` rather than opening the files:
+
+```bash
+cd docs && python -m http.server 8000
+```
+
+Then open http://localhost:8000/ for Adelaide and http://localhost:8000/grid/ for the grid.
 
 ## The problem
 
@@ -53,9 +102,7 @@ What the numbers show:
 
 ## Real city: Adelaide CBD
 
-**[Open the Adelaide map](https://agrim1305.github.io/Pathfinder/)**, the front page of the site.
-
-![Adelaide CBD in 3D: the BFS route (orange) uses fewer street segments but walks 484 m further than the shortest route (blue)](docs/screenshots/adelaide.png)
+**[Open the Adelaide map](https://agrim1305.github.io/Pathfinder/)**, the front page of the site (screenshot above).
 
 BFS, Dijkstra and A\* also run on the real walking network of Adelaide's city centre: 7,539
 junctions and 11,602 street and path segments from OpenStreetMap, with 4,799 buildings
@@ -74,14 +121,6 @@ drawn in 2D or 3D. Click the map to move the start or the flag, and all three se
   ```bash
   pip install -r tools/requirements.txt
   python tools/fetch_adelaide.py && python tools/prep_adelaide.py
-  ```
-
-- To run it locally, serve `docs/` and open http://localhost:8000/ (the grid demo is at
-  http://localhost:8000/grid/). The page loads
-  its data over HTTP, so opening the file directly doesn't work.
-
-  ```bash
-  cd docs && python -m http.server 8000
   ```
 
 Map data © OpenStreetMap contributors, ODbL.
