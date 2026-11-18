@@ -1,6 +1,7 @@
 /*
- * Adelaide CBD map: canvas renderer (2D and 3D share one camera), input, and
- * the page controls. Search logic lives in graph.js.
+ * Adelaide CBD map: canvas renderer and the page controls. The camera and
+ * map input (drag, zoom, keys, 2D/3D tweens) live in ../shared/view.js;
+ * search logic lives in graph.js.
  */
 (function () {
   "use strict";
@@ -32,14 +33,21 @@
         return { name, node: best };
       }).sort((a, b) => a.name.localeCompare(b.name));
       this.D = D;
-      this.state = { mode3d: true, aExp: true, dOnly: false, bfs: true, best: true, start: D.sp, end: D.ep, place: 'start', note: '' };
-      this.cam = { th: -0.38, tilt: 0.92, k: 0.5, cx: 0, cy: 0 };
-      this.tween = null; this.spin = 0; this.raf = 0; this.t0 = 0;
+      this.state = { aExp: true, dOnly: false, bfs: true, best: true, start: D.sp, end: D.ep, place: 'start', note: '' };
+      this.t0 = 0;
       this.reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
       this.res = AdelaideGraph.solve(D, D.sp, D.ep);
-      this.canvas = $('cv');
       this.bindControls();
-      this.attach();
+      this.view = new MapView($('cv'), {
+        cam: { th: -0.38, tilt: 0.92, k: 0.5, cx: 0, cy: 0 },
+        mode3d: true,
+        height: (w) => Math.round(Math.min(Math.max(w * 0.66, 420), 760)),
+        // the search replay runs on its own clock from t0; reduced motion shows the end at once
+        draw: (now) => { const el = this.reduce ? 1e9 : now - this.t0; this.draw(el); return el < this.timeline().end + 50; },
+        pick: (X, Y) => this.pick(X, Y),
+      });
+      this.fit(true);
+      this.restart();
       this.ui();
     }
     setState(patch, cb) { Object.assign(this.state, patch); this.ui(); if (cb) cb(); }
@@ -52,12 +60,12 @@
       this.setState({ start: ns, end: ne, place: start ? 'end' : 'start', note: '' }, () => this.restart());
     }
     bindControls() {
-      document.querySelectorAll('[data-layer]').forEach((b) => b.addEventListener('click', () => { const k = b.dataset.layer; this.setState({ [k]: !this.state[k] }, () => this.kick()); }));
-      $('go2d').addEventListener('click', () => { if (this.state.mode3d) { this.setState({ mode3d: false }); this.spin = 0; this.tweenTo({ tilt: 0, th: 0 }); } });
-      $('go3d').addEventListener('click', () => { if (!this.state.mode3d) { this.setState({ mode3d: true }); this.tweenTo({ tilt: 0.92, th: this.cam.th === 0 ? -0.38 : this.cam.th }); } });
+      document.querySelectorAll('[data-layer]').forEach((b) => b.addEventListener('click', () => { const k = b.dataset.layer; this.setState({ [k]: !this.state[k] }, () => this.view.kick()); }));
+      $('go2d').addEventListener('click', () => { this.view.set3d(false); this.ui(); });
+      $('go3d').addEventListener('click', () => { this.view.set3d(true); this.ui(); });
       $('replay').addEventListener('click', () => this.restart());
-      $('zin').addEventListener('click', () => this.zoomAt(this.W / 2, this.H / 2, 1.3));
-      $('zout').addEventListener('click', () => this.zoomAt(this.W / 2, this.H / 2, 1 / 1.3));
+      $('zin').addEventListener('click', () => this.view.zoomAt(this.view.W / 2, this.view.H / 2, 1.3));
+      $('zout').addEventListener('click', () => this.view.zoomAt(this.view.W / 2, this.view.H / 2, 1 / 1.3));
       $('fit').addEventListener('click', () => this.fit(false));
       $('pStart').addEventListener('click', () => this.setState({ place: 'start', note: '' }));
       $('pEnd').addEventListener('click', () => this.setState({ place: 'end', note: '' }));
@@ -69,7 +77,7 @@
     ui() {
       const s = this.state, D = this.D, R = this.res;
       document.querySelectorAll('[data-layer]').forEach((b) => b.setAttribute('aria-pressed', String(s[b.dataset.layer])));
-      $('go3d').setAttribute('aria-pressed', String(s.mode3d)); $('go2d').setAttribute('aria-pressed', String(!s.mode3d));
+      $('go3d').setAttribute('aria-pressed', String(this.view.mode3d)); $('go2d').setAttribute('aria-pressed', String(!this.view.mode3d));
       const ps = s.place === 'start';
       $('pStart').setAttribute('aria-pressed', String(ps)); $('pEnd').setAttribute('aria-pressed', String(!ps));
       const nm = (n) => D.nodeName[n] || 'a footpath';
@@ -89,131 +97,21 @@
       const est = D.bld.filter((b) => b.est).length;
       $('about').textContent = 'Real OpenStreetMap data for the city centre: ' + D.bld.length.toLocaleString('en-AU') + ' buildings and a walking network of ' + D.N.toLocaleString('en-AU') + ' junctions and ' + D.edges.length.toLocaleString('en-AU') + ' street and path segments. Heights come from each building\'s mapped height or floor count. ' + est.toLocaleString('en-AU') + ' buildings have neither, so they use a typical height and their roofs are drawn a shade darker.';
     }
-    attach() {
-      const c = this.canvas;
-      this.ctx = c.getContext('2d');
-      this.ro = new ResizeObserver(() => this.resize());
-      this.ro.observe(c.parentElement);
-      this.resize();
-      this.fit(true);
-      this.onDown = (e) => this.down(e);
-      this.onMove = (e) => this.move(e);
-      this.onUp = (e) => this.up(e);
-      this.onWheel = (e) => this.wheel(e);
-      this.onKey = (e) => this.key(e);
-      c.addEventListener('pointerdown', this.onDown);
-      c.addEventListener('pointermove', this.onMove);
-      c.addEventListener('pointerup', this.onUp);
-      c.addEventListener('pointercancel', this.onUp);
-      c.addEventListener('wheel', this.onWheel, { passive: false });
-      c.addEventListener('keydown', this.onKey);
-      this.restart();
-    }
-    detach() {
-      const c = this.canvas;
-      if (!c) return;
-      cancelAnimationFrame(this.raf); this.raf = 0;
-      if (this.ro) this.ro.disconnect();
-      c.removeEventListener('pointerdown', this.onDown);
-      c.removeEventListener('pointermove', this.onMove);
-      c.removeEventListener('pointerup', this.onUp);
-      c.removeEventListener('pointercancel', this.onUp);
-      c.removeEventListener('wheel', this.onWheel);
-      c.removeEventListener('keydown', this.onKey);
-    }
-    resize() {
-      const c = this.canvas; if (!c) return;
-      const w = c.parentElement.clientWidth, h = Math.round(Math.min(Math.max(w * 0.66, 420), 760));
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
-      c.style.height = h + 'px';
-      this.W = w; this.H = h; this.dpr = dpr;
-      this.kick();
-    }
-    fitView(th, tilt) {
+    // Frame both routes and the two pins.
+    fit(instant) {
       const D = this.D, R = this.res, pts = [];
       [R.al, R.bl].forEach((ln) => { if (ln) for (let i = 0; i < ln.pts.length; i += 2) pts.push(ln.pts[i], ln.pts[i + 1]); });
       [this.state.start, this.state.end].forEach((v) => pts.push(D.nx[v], D.ny[v]));
-      let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
-      for (let i = 0; i < pts.length; i += 2) { x0 = Math.min(x0, pts[i]); x1 = Math.max(x1, pts[i]); y0 = Math.min(y0, pts[i + 1]); y1 = Math.max(y1, pts[i + 1]); }
-      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, c = Math.cos(th), s = Math.sin(th), ct = Math.cos(tilt);
-      let a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9;
-      for (let i = 0; i < pts.length; i += 2) {
-        const dx = pts[i] - cx, dy = pts[i + 1] - cy, a = dx * c - dy * s, b = (dx * s + dy * c) * ct;
-        a0 = Math.min(a0, a); a1 = Math.max(a1, a); b0 = Math.min(b0, b); b1 = Math.max(b1, b);
-      }
-      const k = Math.max(0.2, Math.min(2.2, Math.min((this.W * 0.78) / Math.max(a1 - a0, 50), (this.H * 0.7) / Math.max(b1 - b0, 50))));
-      // shift so the projected box is centred, nudged down to leave room for flag labels
-      const ma = (a0 + a1) / 2, mb = (b0 + b1) / 2 - 18 / k;
-      const yr = mb / Math.max(ct, 0.05);
-      return { th, tilt, k, cx: cx + ma * c + yr * s, cy: cy - ma * s + yr * c };
+      this.view.fit(pts, instant);
     }
-    fit(instant) {
-      const to = this.fitView(this.state.mode3d ? -0.38 : 0, this.state.mode3d ? 0.92 : 0);
-      if (instant) { Object.assign(this.cam, to); this.kick(); } else this.tweenTo(to);
-    }
-    restart() { this.t0 = performance.now(); this.kick(); }
-    kick() { if (!this.raf && this.ctx) this.raf = requestAnimationFrame((t) => this.frame(t)); }
-    frame(now) {
-      this.raf = 0;
-      let busy = false;
-      if (this.tween) {
-        const tw = this.tween, p = Math.min(1, (now - tw.t) / tw.d), e = 1 - Math.pow(1 - p, 3);
-        for (const k in tw.to) this.cam[k] = tw.from[k] + (tw.to[k] - tw.from[k]) * e;
-        if (p >= 1) this.tween = null; else busy = true;
-      }
-      if (Math.abs(this.spin) > 0.0004 && !this.drag) { this.cam.th += this.spin; this.spin *= 0.92; busy = true; } else if (!this.drag) this.spin = 0;
-      const el = this.reduce ? 1e9 : now - this.t0;
-      this.draw(el);
-      if (busy || el < this.timeline().end + 50) this.kick();
-    }
-    kick() { if (!this.raf && this.ctx) this.raf = requestAnimationFrame((t) => this.frame(t)); }
-    frame(now) {
-      this.raf = 0;
-      let busy = false;
-      if (this.tween) {
-        const tw = this.tween, p = Math.min(1, (now - tw.t) / tw.d), e = 1 - Math.pow(1 - p, 3);
-        for (const k in tw.to) this.cam[k] = tw.from[k] + (tw.to[k] - tw.from[k]) * e;
-        if (p >= 1) this.tween = null; else busy = true;
-      }
-      if (Math.abs(this.spin) > 0.0004 && !this.drag) { this.cam.th += this.spin; this.spin *= 0.92; busy = true; } else if (!this.drag) this.spin = 0;
-      const el = this.reduce ? 1e9 : now - this.t0;
-      this.draw(el);
-      if (busy || el < this.timeline().end + 50) this.kick();
-    }
-    frame(now) {
-      this.raf = 0;
-      let busy = false;
-      if (this.tween) {
-        const tw = this.tween, p = Math.min(1, (now - tw.t) / tw.d), e = 1 - Math.pow(1 - p, 3);
-        for (const k in tw.to) this.cam[k] = tw.from[k] + (tw.to[k] - tw.from[k]) * e;
-        if (p >= 1) this.tween = null; else busy = true;
-      }
-      if (Math.abs(this.spin) > 0.0004 && !this.drag) { this.cam.th += this.spin; this.spin *= 0.92; busy = true; } else if (!this.drag) this.spin = 0;
-      const el = this.reduce ? 1e9 : now - this.t0;
-      this.draw(el);
-      if (busy || el < this.timeline().end + 50) this.kick();
-    }
+    restart() { this.t0 = performance.now(); this.view.kick(); }
     timeline() {
       const n = this.res.A.order.length, step = Math.min(14, 1800 / Math.max(n, 1));
       const reveal = n * step;
       return { step, reveal, drawEnd: reveal + 1300, end: reveal + 1300 + 2800 };
     }
-    P(x, y, z) {
-      const m = this.cam, c = Math.cos(m.th), s = Math.sin(m.th);
-      const dx = x - m.cx, dy = y - m.cy;
-      return [this.W / 2 + (dx * c - dy * s) * m.k, this.H / 2 + ((dx * s + dy * c) * Math.cos(m.tilt) - z * Math.sin(m.tilt)) * m.k];
-    }
-    unP(X, Y) {
-      const m = this.cam, c = Math.cos(m.th), s = Math.sin(m.th);
-      const xr = (X - this.W / 2) / m.k, yr = (Y - this.H / 2) / (m.k * Math.max(Math.cos(m.tilt), 0.05));
-      return [m.cx + xr * c + yr * s, m.cy - xr * s + yr * c];
-    }
     draw(el) {
-      const ctx = this.ctx, D = this.D, m = this.cam, W = this.W, H = this.H;
-      if (!ctx) return;
-      const night = false;
-      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      const view = this.view, ctx = view.ctx, D = this.D, m = view.cam, W = view.W, H = view.H;
       ctx.fillStyle = '#E9EBE6'; ctx.fillRect(0, 0, W, H);
       const c = Math.cos(m.th), s = Math.sin(m.th), ct = Math.cos(m.tilt), st = Math.sin(m.tilt), k = m.k;
       const hw = W / 2, hh = H / 2, cx = m.cx, cy = m.cy;
@@ -360,74 +258,17 @@
       ctx.textAlign = 'right'; ctx.font = '500 11px Geist, -apple-system, system-ui, sans-serif'; ctx.fillStyle = 'rgba(21,24,29,0.6)';
       ctx.fillText('Map data © OpenStreetMap contributors', W - 10, H - 12);
     }
-    down(e) {
-      this.canvas.setPointerCapture(e.pointerId);
-      this.tween = null; this.spin = 0;
-      this.drag = { x: e.clientX, y: e.clientY, lx: e.clientX, moved: false, pan: !this.state.mode3d || e.shiftKey || e.button === 2 };
-    }
-    move(e) {
-      const d = this.drag;
-      if (!d) return;
-      const dx = e.clientX - d.lx, dy = e.clientY - (d.ly ?? d.y);
-      if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) d.moved = true;
-      if (!d.moved) return;
-      const m = this.cam;
-      if (d.pan) {
-        const c = Math.cos(m.th), s = Math.sin(m.th), ct = Math.max(Math.cos(m.tilt), 0.05);
-        const xr = dx / m.k, yr = dy / (m.k * ct);
-        m.cx -= xr * c + yr * s; m.cy -= -xr * s + yr * c;
-      } else {
-        m.th += dx * 0.006; this.spin = dx * 0.006;
-        m.tilt = Math.max(0.3, Math.min(1.15, m.tilt - dy * 0.005));
-      }
-      d.lx = e.clientX; d.ly = e.clientY;
-      this.kick();
-    }
-    up(e) {
-      const d = this.drag; this.drag = null;
-      if (!d) return;
-      if (!d.moved) { this.pick(e); return; }
-      if (this.reduce) this.spin = 0;
-      this.kick();
-    }
-    pick(e) {
-      const r = this.canvas.getBoundingClientRect(), X = e.clientX - r.left, Y = e.clientY - r.top, D = this.D;
+    // A click on the map (X, Y in canvas pixels) moves a pin to the nearest junction.
+    pick(X, Y) {
+      const D = this.D;
       let best = -1, bd = 26 * 26;
       for (let i = 0; i < D.N; i++) {
-        const p = this.P(D.nx[i], D.ny[i], 1.5);
+        const p = this.view.P(D.nx[i], D.ny[i], 1.5);
         const d = (p[0] - X) ** 2 + (p[1] - Y) ** 2;
         if (d < bd) { bd = d; best = i; }
       }
       if (best < 0) { this.setState({ note: 'No street there. Click closer to a road or path.' }); return; }
       this.movePin(best);
-    }
-    wheel(e) {
-      e.preventDefault();
-      const r = this.canvas.getBoundingClientRect(), X = e.clientX - r.left, Y = e.clientY - r.top;
-      this.zoomAt(X, Y, Math.exp(-e.deltaY * 0.0015));
-    }
-    zoomAt(X, Y, f) {
-      const m = this.cam;
-      const [wx, wy] = this.unP(X, Y);
-      m.k = Math.max(0.18, Math.min(4, m.k * f));
-      const [nx, ny] = this.unP(X, Y);
-      m.cx += wx - nx; m.cy += wy - ny;
-      this.kick();
-    }
-    key(e) {
-      const m = this.cam, step = 60 / m.k;
-      const map = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
-      if (map[e.key]) {
-        e.preventDefault();
-        const c = Math.cos(m.th), s = Math.sin(m.th), [a, b] = map[e.key];
-        m.cx += a * c + b * s; m.cy += -a * s + b * c; this.kick();
-      } else if (e.key === '+' || e.key === '=') { this.zoomAt(this.W / 2, this.H / 2, 1.25); }
-      else if (e.key === '-') { this.zoomAt(this.W / 2, this.H / 2, 0.8); }
-    }
-    tweenTo(to) {
-      if (this.reduce) { Object.assign(this.cam, to); this.kick(); return; }
-      const from = {}; for (const k in to) from[k] = this.cam[k];
-      this.tween = { from, to, t: performance.now(), d: 650 }; this.kick();
     }
   }
 
