@@ -1,23 +1,37 @@
 /*
  * Adelaide CBD map: canvas renderer and the page controls. The camera and
  * map input (drag, zoom, keys, 2D/3D tweens) live in ../shared/view.js;
- * search logic lives in graph.js.
+ * search logic lives in graph.js; pin names, the place search and the
+ * summary sentence live in text.js; the search boxes, popovers, "?" tips and
+ * the timeline bar live in ../shared/ui.js.
  */
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  // Walking time from distance, at about 5 km/h (1.4 m/s) with no waits at crossings.
-  const WALK_M_PER_S = 1.4;
-  const walkMinutes = (m) => Math.round(m / WALK_M_PER_S / 60);
-  // numbers keep their units on the same line (no-break spaces)
-  const walkTime = (m) => (m / WALK_M_PER_S < 60 ? 'under 1\u00a0min' : walkMinutes(m) + '\u00a0min');
+  const X = AdelaideText;
+  const num = X.num;
   // the data sits beside this script, wherever the page that loads it lives
   const DATA = new URL('data/adelaide_cbd.json', document.currentScript.src).href;
+  // localStorage can be blocked; then the page just forgets between visits
+  const store = {
+    get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* see above */ } },
+  };
+  const SEEN = 'pathfinder-welcome-seen', LEARN = 'pathfinder-learn-open';
+  // The replay takes about 7 s however long the searches are. The three race
+  // at the same pace (one junction checked per step) and the race takes
+  // SEARCH_MS; each route draws over DRAW_MS as soon as its search finishes;
+  // then a marker walks the shortest route over WALK_MS. Steps advance with
+  // elapsed time, not one per frame. Short searches step at most 40 ms apart.
+  const SEARCH_MS = 4500, DRAW_MS = 900, WALK_MS = 1600, MAX_STEP_MS = 40;
+  const DIM = 0.18; // the other layers while one search is in focus
+  const FOCUS_MS = 220; // fade between focus states
+  const TOUR_MS = 1500; // each step of the "Start with an example" tour
+  const clamp01 = (x) => Math.max(0, Math.min(1, x));
 
   class MapApp {
     constructor(raw) {
-      const G = AdelaideGraph.load(raw);
-      const D = G;
+      const D = AdelaideGraph.load(raw);
       const ring = (f, off) => { const p = []; for (let i = off; i < f.length; i++) p.push(f[i] / 2); return p; };
       D.bld = raw.b.map((f) => {
         const p = ring(f, 2); let cx = 0, cy = 0, area = 0; const m = p.length / 2;
@@ -29,19 +43,27 @@
       D.rail = raw.rl.map((f) => ring(f, 0));
       D.bbox = raw.bbox.map((v) => v / 2);
       D.st = raw.st; D.pl = raw.pl;
-      // a readable name for each junction: its most important named street
-      D.nodeName = new Array(D.N).fill('');
+      D.places = raw.pl.map(([name, x, y]) => [name, x / 2, y / 2]);
+      // each landmark starts from its nearest junction on a main named street
       const rank = new Array(D.N).fill(99);
-      D.edges.forEach((e) => { if (!e.nm) return; [e.a, e.b].forEach((v) => { if (e.cls < rank[v]) { rank[v] = e.cls; D.nodeName[v] = raw.names[e.nm]; } }); });
+      D.edges.forEach((e) => { if (e.nm) for (const v of [e.a, e.b]) rank[v] = Math.min(rank[v], e.cls); });
       const named = []; for (let i = 0; i < D.N; i++) if (rank[i] <= 3) named.push(i);
-      D.marks = raw.pl.map(([name, x, y]) => {
+      D.marks = D.places.map(([name, x, y]) => {
         let best = -1, bd = 1e18;
-        for (const i of named) { const d = (D.nx[i] - x / 2) ** 2 + (D.ny[i] - y / 2) ** 2; if (d < bd) { bd = d; best = i; } }
+        for (const i of named) { const d = (D.nx[i] - x) ** 2 + (D.ny[i] - y) ** 2; if (d < bd) { bd = d; best = i; } }
         return { name, node: best };
-      }).sort((a, b) => a.name.localeCompare(b.name));
+      });
       this.D = D;
-      this.state = { aExp: true, dOnly: false, bfs: true, best: true, start: D.sp, end: D.ep, place: 'start', note: '' };
-      this.t0 = 0;
+      this.entries = X.entries(D, D.marks).map((e) => Object.assign(e, { hint: e.kind === 'place' ? 'Place' : 'Street' }));
+      this.layers = { aExp: true, dOnly: false, bfs: true, best: true };
+      this.start = D.sp; this.end = D.ep;
+      this.label = { start: null, end: null }; // a name chosen from a list, kept as typed
+      this.next = 'start'; // which pin a plain click on the map moves
+      this.picking = null; // 'start' or 'end' after "Pick on map"
+      this.note = '';
+      this.hover = null; this.kbd = null; this.pinned = null; this.focus = null; // which search the map shows
+      this.alpha = this.alphas(); this.fade = null;
+      this.t = 0; this.playing = false; this.last = 0; this.shownK = -1;
       this.widths = new Map(); // label widths, measured once per font and text
       // Map colours follow the page theme, fading over 300 ms (at once under reduced motion).
       const P = AdelaidePalette.PALETTES;
@@ -51,97 +73,311 @@
         this.view.kick();
       });
       this.reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-      this.res = this.solve(D.sp, D.ep);
-      this.bindControls();
+      this.res = this.solve(this.start, this.end);
       this.view = new MapView($('cv'), {
         cam: { th: -0.38, tilt: 0.92, k: 0.5, cx: 0, cy: 0 },
         mode3d: true,
-        height: (w) => mapHeight(w),
-        // the search replay runs on its own clock from t0; reduced motion shows the end at once
-        draw: (now) => { const el = this.reduce ? 1e9 : now - this.t0; this.draw(el); return el < this.timeline().end + 50 || this.pal.t0 > 0; },
-        pick: (X, Y) => this.pick(X, Y),
+        height: () => $('map').clientHeight,
+        draw: (now) => this.frame(now),
+        pick: (x, y) => this.pick(x, y, 26),
       });
-      this.view.bindButtons(document.querySelector('.overlay-zoom'));
-      this.fit(true);
-      this.restart();
+      this.view.bindButtons($('ctl'));
+      this.bind();
+      const est = D.bld.filter((b) => b.est).length;
+      $('about').textContent = 'Real OpenStreetMap data for the city centre: ' + num(D.bld.length) + ' buildings and a walking network of ' + num(D.N) + ' junctions and ' + num(D.edges.length) + ' street and path segments. Heights come from each building\'s mapped height or floor count. ' + num(est) + ' buildings have neither, so they use a typical height and their roofs are drawn a shade darker.';
+      this.showNames();
       this.ui();
+      this.fit(true);
+      // A first visit opens on the welcome card with the example walk ready to play.
+      if (store.get(SEEN)) this.play(true);
+      else this.welcome(true, false);
     }
-    setState(patch, cb) { Object.assign(this.state, patch); this.ui(); if (cb) cb(); }
-    // The three searches, plus how long each takes: the median of 5 timed runs,
-    // measured here from outside graph.js.
+
+    // The three searches, plus how long each takes: the median of 5 timed
+    // runs, measured here from outside graph.js. Also the replay's clock.
     solve(s, t) {
       const res = AdelaideGraph.solve(this.D, s, t), time = (alg) => Timing.medianMs(() => AdelaideGraph.search(this.D, alg, s, t));
       res.ms = { B: time('bfs'), U: time('ucs'), A: time('astar') };
+      const n = { A: res.A.order.length, U: res.U.order.length, B: res.B.order.length };
+      const N = Math.max(n.A, n.U, n.B, 1), stepMs = Math.min(MAX_STEP_MS, SEARCH_MS / N), searchEnd = N * stepMs;
+      res.tm = { n, N, stepMs, searchEnd, total: searchEnd + DRAW_MS + WALK_MS };
       return res;
     }
-    movePin(v) {
-      const s = this.state, start = s.place === 'start', other = start ? s.end : s.start;
-      if (v === other) { this.setState({ note: start ? 'The flag is already there.' : 'The start is already there.' }); return; }
-      const ns = start ? v : s.start, ne = start ? s.end : v;
-      this.res = this.solve(ns, ne);
-      this.setState({ start: ns, end: ne, place: start ? 'end' : 'start', note: '' }, () => this.restart());
+
+    // ---------- choosing the walk ----------
+    setPin(which, v, label, fit) {
+      if (v === (which === 'start' ? this.end : this.start)) {
+        this.note = which === 'start' ? 'That is already your destination. Pick another place.' : 'That is already your start. Pick another place.';
+        this.showNames();
+        return this.ui();
+      }
+      this[which] = v;
+      this.label[which] = label || null;
+      this.next = which === 'start' ? 'end' : 'start';
+      this.walkChanged(fit);
     }
-    bindControls() {
-      document.querySelectorAll('[data-layer]').forEach((b) => b.addEventListener('click', () => { const k = b.dataset.layer; this.setState({ [k]: !this.state[k] }, () => this.view.kick()); }));
+    swap() {
+      [this.start, this.end] = [this.end, this.start];
+      [this.label.start, this.label.end] = [this.label.end, this.label.start];
+      this.walkChanged(true);
+    }
+    example() {
+      this.start = this.D.sp; this.end = this.D.ep;
+      this.label = { start: null, end: null };
+      this.next = 'start';
+      this.walkChanged(true);
+    }
+    // A new walk runs the searches and replays them at once. A click on the
+    // map leaves the camera alone, so the next click lands where you aimed.
+    walkChanged(fit) {
+      this.note = '';
+      this.res = this.solve(this.start, this.end);
+      this.showNames();
+      this.findRoutes(fit);
+    }
+    findRoutes(fit) {
+      this.ui();
+      if (fit) this.fit(false);
+      this.play(true);
+    }
+    showNames() {
+      const D = this.D;
+      this.setFrom(this.label.start || X.placeName(D, this.start, D.places));
+      this.setTo(this.label.end || X.placeName(D, this.end, D.places));
+    }
+    startPick(which, button) {
+      if (this.picking === which) return this.stopPick(true);
+      this.picking = which;
+      this.pickButton = button;
+      this.note = '';
+      this.ui();
+      this.view.canvas.focus({ preventScroll: true }); // so Enter picks the middle and Escape cancels
+      this.view.kick();
+    }
+    stopPick(refocus) {
+      const b = this.pickButton;
+      this.picking = null;
+      this.pickButton = null;
+      this.ui();
+      this.view.kick();
+      if (refocus && b) b.focus({ preventScroll: true });
+    }
+    // A click on the map (x, y in canvas pixels) moves a pin to the nearest junction within maxPx.
+    pick(x, y, maxPx) {
+      const D = this.D;
+      let best = -1, bd = maxPx * maxPx;
+      for (let i = 0; i < D.N; i++) {
+        const p = this.view.P(D.nx[i], D.ny[i], 1.5);
+        const d = (p[0] - x) ** 2 + (p[1] - y) ** 2;
+        if (d < bd) { bd = d; best = i; }
+      }
+      if (best < 0) { this.note = 'No street there. Click closer to a road or path.'; return this.ui(); }
+      const which = this.picking || this.next, picked = !!this.picking;
+      if (picked) this.stopPick(true);
+      this.setPin(which, best, null, false);
+    }
+
+    // ---------- the replay ----------
+    stepAt(t) { const tm = this.res.tm; return Math.min(tm.N, Math.floor(t / tm.stepMs + 1e-9)); }
+    play(fromStart) {
+      const tm = this.res.tm;
+      if (fromStart || this.t >= tm.total) this.t = 0;
+      if (this.reduce) { this.t = tm.total; this.playing = false; } // no animation: show the end at once
+      else { this.playing = true; this.last = performance.now(); }
+      this.view.kick();
+    }
+    seek(k) {
+      const tm = this.res.tm;
+      this.playing = false;
+      this.t = k >= tm.N ? tm.total : k * tm.stepMs;
+      this.view.kick();
+    }
+    frame(now) {
+      const tm = this.res.tm;
+      if (this.playing) {
+        this.t += Math.min(100, Math.max(0, now - this.last)); // a hidden tab pauses rather than jumps
+        this.last = now;
+        if (this.t >= tm.total) { this.t = tm.total; this.playing = false; }
+      }
+      this.draw();
+      this.progress();
+      return this.playing || this.pal.t0 > 0 || !!this.fade;
+    }
+    // The timeline bar and each card's count of junctions checked so far.
+    progress() {
+      const tm = this.res.tm, k = this.stepAt(this.t), state = this.playing ? 'playing' : this.t >= tm.total ? 'done' : 'paused';
+      this.timeline(k, tm.N, state, `Step ${num(k)} of ${num(tm.N)}`);
+      if (k === this.shownK) return;
+      this.shownK = k;
+      for (const a of ['A', 'U', 'B']) {
+        const n = tm.n[a], s = Math.min(n, k), c = this.cards[a];
+        c.meta.textContent = `checked ${num(s)} junctions · found in ${Timing.formatMs(this.res.ms[a])}`;
+        c.bar.style.setProperty('--p', n ? s / n : 1);
+      }
+    }
+
+    // ---------- which search the map shows ----------
+    // How strongly to draw each layer: all that are on, or one search's
+    // junctions and route with the rest faded back.
+    alphas() {
+      const L = this.layers, on = (k) => (L[k] ? 1 : 0), f = this.focus;
+      if (f === 'A') return { dOnly: on('dOnly') * DIM, uAll: 0, aExp: 1, bDots: 0, bfs: on('bfs') * DIM, best: 1 };
+      if (f === 'U') return { dOnly: 0, uAll: 1, aExp: 0, bDots: 0, bfs: on('bfs') * DIM, best: 1 };
+      if (f === 'B') return { dOnly: on('dOnly') * DIM, uAll: 0, aExp: on('aExp') * DIM, bDots: 1, bfs: 1, best: on('best') * DIM };
+      return { dOnly: on('dOnly'), uAll: 0, aExp: on('aExp'), bDots: 0, bfs: on('bfs'), best: on('best') };
+    }
+    refocus() {
+      this.focus = this.hover || this.kbd || this.pinned;
+      for (const a of ['A', 'U', 'B']) this.cards[a].pin.setAttribute('aria-pressed', String(this.pinned === a));
+      const to = this.alphas();
+      this.fade = this.reduce ? null : { from: this.alphaNow(), to, t0: performance.now() };
+      this.alpha = to;
+      this.view.kick();
+    }
+    alphaNow() {
+      const f = this.fade;
+      if (!f) return this.alpha;
+      const p = clamp01((performance.now() - f.t0) / FOCUS_MS);
+      if (p >= 1) { this.fade = null; return this.alpha; }
+      const out = {};
+      for (const k in f.to) out[k] = f.from[k] + (f.to[k] - f.from[k]) * p;
+      return out;
+    }
+
+    // ---------- the welcome card and the tour ----------
+    welcome(open, focus) {
+      $('welcome').hidden = !open;
+      if (open && focus) $('welcomeGo').focus();
+      if (!open) store.set(SEEN, '1');
+      this.view.kick();
+    }
+    tour() {
+      if (this.reduce) return; // no tour under reduced motion
+      const steps = [
+        ['step1', 'Step 1: choose any two places here, or click the map.'],
+        ['step2', 'Step 2: the three searches race. A* finishes first.'],
+        ['step3', 'Step 3: what the race shows, in one sentence.'],
+      ];
+      let i = 0;
+      const next = () => {
+        document.querySelectorAll('.step.touring').forEach((s) => s.classList.remove('touring'));
+        if (i >= steps.length) return this.endTour();
+        const [id, text] = steps[i++];
+        $(id).classList.add('touring');
+        $(id).scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        $('tourText').textContent = text;
+        $('tour').hidden = false;
+        this.tourTimer = setTimeout(next, TOUR_MS);
+      };
+      next();
+    }
+    endTour() {
+      clearTimeout(this.tourTimer);
+      this.tourTimer = 0;
+      document.querySelectorAll('.step.touring').forEach((s) => s.classList.remove('touring'));
+      $('tour').hidden = true;
+    }
+
+    // ---------- controls ----------
+    bind() {
+      const D = this.D;
+      const box = (which, input, list) => UI.combobox(input, list, {
+        search: (q) => X.search(q, this.entries),
+        pick: (e) => {
+          if (e.node === undefined) e.node = X.streetNode(D, e.nm);
+          this.setPin(which, e.node, e.label, true);
+        },
+        status: $('cbStatus'),
+      });
+      this.setFrom = box('start', $('from'), $('fromList'));
+      this.setTo = box('end', $('to'), $('toList'));
+      document.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', () => this.startPick(b.dataset.pick, b)));
+      $('swap').addEventListener('click', () => this.swap());
+      $('find').addEventListener('click', () => this.findRoutes(true));
+      $('example').addEventListener('click', () => this.example());
+      // result cards: hover or focus shows that search, a click keeps it
+      this.cards = {};
+      document.querySelectorAll('.rc').forEach((el) => {
+        const a = el.dataset.alg, pin = el.querySelector('.rc-pin');
+        this.cards[a] = { pin, time: el.querySelector('.rc-time'), dist: el.querySelector('.rc-dist'), meta: el.querySelector('.rc-meta'), bar: el.querySelector('.rc-bar') };
+        el.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') { this.hover = a; this.refocus(); } });
+        el.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') { this.hover = null; this.refocus(); } });
+        pin.addEventListener('focus', () => { this.kbd = a; this.refocus(); });
+        pin.addEventListener('blur', () => { this.kbd = null; this.refocus(); });
+        pin.addEventListener('click', () => { this.pinned = this.pinned === a ? null : a; this.refocus(); });
+      });
+      document.querySelectorAll('[data-layer]').forEach((c) => c.addEventListener('change', () => { this.layers[c.dataset.layer] = c.checked; this.refocus(); }));
+      UI.popover($('layersBtn'), $('layersPanel'), () => this.view.kick());
+      UI.popover($('aboutBtn'), $('aboutPanel'), () => this.view.kick());
+      this.timeline = UI.timeline($('timeline'), {
+        toggle: () => { if (this.playing) this.playing = false; else this.play(false); this.view.kick(); },
+        seek: (k) => this.seek(k),
+      });
       $('go2d').addEventListener('click', () => { this.view.set3d(false); this.ui(); });
       $('go3d').addEventListener('click', () => { this.view.set3d(true); this.ui(); });
-      $('replay').addEventListener('click', () => this.restart());
       $('fit').addEventListener('click', () => this.fit(false));
-      $('pStart').addEventListener('click', () => this.setState({ place: 'start', note: '' }));
-      $('pEnd').addEventListener('click', () => this.setState({ place: 'end', note: '' }));
-      $('resetPins').addEventListener('click', () => { const D = this.D; this.res = this.solve(D.sp, D.ep); this.setState({ start: D.sp, end: D.ep, place: 'start', note: '' }, () => { this.restart(); this.fit(false); }); });
-      const sel = $('marks');
-      this.D.marks.forEach((m) => { const o = document.createElement('option'); o.value = m.node; o.textContent = m.name; sel.appendChild(o); });
-      sel.addEventListener('change', () => { const n = Number(sel.value); if (sel.value !== '' && n >= 0) this.movePin(n); sel.value = ''; });
+      // the welcome card, and "?" in the header to see it again
+      $('welcomeBtn').addEventListener('click', () => this.welcome(true, true));
+      $('welcomeClose').addEventListener('click', () => {
+        this.welcome(false);
+        if (!this.playing && this.t === 0) this.play(true);
+        $('welcomeBtn').focus({ preventScroll: true });
+      });
+      $('welcomeGo').addEventListener('click', () => { this.welcome(false); this.example(); this.tour(); });
+      $('tourSkip').addEventListener('click', () => this.endTour());
+      const learn = $('learn');
+      learn.open = store.get(LEARN) === 'open';
+      learn.addEventListener('toggle', () => store.set(LEARN, learn.open ? 'open' : 'closed'));
+      this.view.canvas.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && this.picking) { e.preventDefault(); this.pick(this.view.W / 2, this.view.H / 2, Infinity); }
+      });
+      // Escape steps back out: picking on the map, then the tour, then the welcome card
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (this.picking) this.stopPick(true);
+        else if (this.tourTimer) this.endTour();
+        else if (!$('welcome').hidden) $('welcomeClose').click();
+      });
     }
     ui() {
-      const s = this.state, D = this.D, R = this.res;
-      document.querySelectorAll('[data-layer]').forEach((b) => b.setAttribute('aria-pressed', String(s[b.dataset.layer])));
-      $('go3d').setAttribute('aria-pressed', String(this.view.mode3d)); $('go2d').setAttribute('aria-pressed', String(!this.view.mode3d));
-      const ps = s.place === 'start';
-      $('pStart').setAttribute('aria-pressed', String(ps)); $('pEnd').setAttribute('aria-pressed', String(!ps));
+      const R = this.res, view = this.view;
+      $('go3d').setAttribute('aria-pressed', String(view.mode3d)); $('go2d').setAttribute('aria-pressed', String(!view.mode3d));
       // turning and tilting are 3D only
-      $('help').textContent = this.view.mode3d ? 'Drag to move the map. Right-drag or Ctrl and drag to turn and tilt it. Scroll or pinch to zoom.' : 'Drag to move the map. Scroll or pinch to zoom.';
-      const nm = (n) => D.nodeName[n] || 'a footpath';
-      $('hint').textContent = s.note || ('Start on ' + nm(s.start) + '. Flag on ' + nm(s.end) + '. Click the map to move the ' + (ps ? 'start.' : 'flag.'));
-      const n = (x) => Math.round(x).toLocaleString('en-AU');
-      const dist = (r) => (r.path ? n(r.dist) + '\u00a0m' : 'no route');
-      const ex = (r, ms) => n(r.order.length) + ' junctions, found in ' + Timing.formatMs(ms);
-      for (const [id, r, ms] of [['bfs', R.B, R.ms.B], ['ucs', R.U, R.ms.U], ['astar', R.A, R.ms.A]]) {
-        $(id + 'Dist').textContent = dist(r);
-        $(id + 'Walk').textContent = r.path ? walkTime(r.dist) : '';
-        $(id + 'N').textContent = ex(r, ms);
+      $('help').textContent = view.mode3d ? 'Drag to move the map. Right-drag or Ctrl and drag to turn and tilt it. Scroll or pinch to zoom.' : 'Drag to move the map. Scroll or pinch to zoom.';
+      const whose = (w) => (w === 'start' ? 'start' : 'destination');
+      document.querySelectorAll('[data-pick]').forEach((b) => b.setAttribute('aria-pressed', String(this.picking === b.dataset.pick)));
+      $('hint').textContent = this.note || (this.picking ? '' : `The next click on the map sets your ${whose(this.next)}.`);
+      const chip = $('pickChip');
+      chip.hidden = !this.picking;
+      if (this.picking) {
+        const small = document.createElement('small');
+        small.textContent = ' Or press Enter for the middle of the map. Escape cancels.';
+        chip.replaceChildren(`Click the map to set your ${whose(this.picking)}.`, document.createElement('br'), small);
       }
-      const longer = Math.round(R.B.dist - R.A.dist), slower = walkMinutes(R.B.dist) - walkMinutes(R.A.dist);
-      if (longer > 5) {
-        $('headline').textContent = 'BFS counts segments, not metres. It walks ' + n(longer) + '\u00a0m further' + (slower > 0 ? ', ' + slower + '\u00a0min more.' : '.');
-        $('summary').textContent = 'BFS finds the route with the fewest street segments (' + R.B.pe.length + '): ' + dist(R.B) + ', ' + walkTime(R.B.dist) + ' on foot. Dijkstra and A* find the shortest walk: ' + dist(R.A) + ', ' + walkTime(R.A.dist) + ' on foot. A* gets there after expanding ' + n(R.A.order.length) + ' junctions; Dijkstra expands ' + n(R.U.order.length) + '.';
-      } else {
-        $('headline').textContent = 'Same walk for all three. A* searched far less.';
-        $('summary').textContent = 'Every algorithm finds the same ' + dist(R.A) + ' walk here, ' + walkTime(R.A.dist) + ' on foot. A* expanded ' + n(R.A.order.length) + ' junctions, Dijkstra ' + n(R.U.order.length) + ' and BFS ' + n(R.B.order.length) + '.';
+      view.canvas.classList.toggle('picking', !!this.picking);
+      for (const a of ['A', 'U', 'B']) {
+        const r = R[a], c = this.cards[a];
+        c.time.textContent = r.path ? X.walkTime(r.dist) : 'No route';
+        c.dist.textContent = r.path ? X.distText(r.dist) : '';
       }
-      const est = D.bld.filter((b) => b.est).length;
-      $('about').textContent = 'Real OpenStreetMap data for the city centre: ' + D.bld.length.toLocaleString('en-AU') + ' buildings and a walking network of ' + D.N.toLocaleString('en-AU') + ' junctions and ' + D.edges.length.toLocaleString('en-AU') + ' street and path segments. Heights come from each building\'s mapped height or floor count. ' + est.toLocaleString('en-AU') + ' buildings have neither, so they use a typical height and their roofs are drawn a shade darker.';
+      this.shownK = -1; // the counts redraw on the next frame
+      $('insight').textContent = X.insight(R);
+      view.kick();
     }
     // Frame both routes and the two pins.
     fit(instant) {
       const D = this.D, R = this.res, pts = [];
       [R.al, R.bl].forEach((ln) => { if (ln) for (let i = 0; i < ln.pts.length; i += 2) pts.push(ln.pts[i], ln.pts[i + 1]); });
-      [this.state.start, this.state.end].forEach((v) => pts.push(D.nx[v], D.ny[v]));
+      [this.start, this.end].forEach((v) => pts.push(D.nx[v], D.ny[v]));
       this.view.fit(pts, instant);
     }
-    restart() { this.t0 = performance.now(); this.view.kick(); }
     colours() {
       const f = this.pal.t0 ? Math.min(1, (performance.now() - this.pal.t0) / 300) : 1;
       if (f >= 1) this.pal.t0 = 0;
       return AdelaidePalette.mix(this.pal.from, this.pal.to, f);
     }
-    timeline() {
-      const n = this.res.A.order.length, step = Math.min(14, 1800 / Math.max(n, 1));
-      const reveal = n * step;
-      return { step, reveal, drawEnd: reveal + 1300, end: reveal + 1300 + 2800 };
-    }
-    draw(el) {
+
+    draw() {
       const view = this.view, ctx = view.ctx, D = this.D, m = view.cam, W = view.W, H = view.H, C = this.colours();
       ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
       const c = Math.cos(m.th), s = Math.sin(m.th), ct = Math.cos(m.tilt), st = Math.sin(m.tilt), k = m.k;
@@ -184,8 +420,8 @@
       const vis = [];
       const pad = 80;
       for (const b of D.bld) {
-        const X = PX(b.cx, b.cy), Y = PY(b.cx, b.cy, 0);
-        if (X < -pad || X > W + pad || Y < -pad || Y > H + pad + b.h * st * k) continue;
+        const X_ = PX(b.cx, b.cy), Y_ = PY(b.cx, b.cy, 0);
+        if (X_ < -pad || X_ > W + pad || Y_ < -pad || Y_ > H + pad + b.h * st * k) continue;
         vis.push(b);
         b.depth = (b.cx - cx) * s + (b.cy - cy) * c;
       }
@@ -217,23 +453,28 @@
           ctx.lineWidth = 0.5; ctx.strokeStyle = C.roofEdge; ctx.stroke();
         }
       }
-      // ---------- search overlay ----------
-      const R = this.res, st8 = this.state, tl = this.timeline();
+      // ---------- search overlay: the junctions each search has checked so far, then the routes ----------
+      const R = this.res, tm = R.tm, time = this.t, step = this.stepAt(time), A = this.alphaNow();
       const dotR = Math.max(1.8, Math.min(4.5, 6 * k));
       const lift = 1.5;
-      if (st8.dOnly) {
+      const dots = (order, color, alpha, skip) => {
+        if (alpha < 0.01) return;
+        const n = Math.min(order.length, step);
         ctx.beginPath();
-        for (const v of R.skipped) { const X = PX(D.nx[v], D.ny[v]), Y = PY(D.nx[v], D.ny[v], lift); ctx.moveTo(X + dotR, Y); ctx.arc(X, Y, dotR, 0, 6.2832); }
-        ctx.fillStyle = C.skipped; ctx.fill();
-      }
-      if (st8.aExp) {
-        const shown = Math.min(R.A.order.length, Math.floor(el / tl.step) + 1);
-        ctx.beginPath();
-        for (let i = 0; i < shown; i++) { const v = R.A.order[i]; const X = PX(D.nx[v], D.ny[v]), Y = PY(D.nx[v], D.ny[v], lift); ctx.moveTo(X + dotR, Y); ctx.arc(X, Y, dotR, 0, 6.2832); }
-        ctx.fillStyle = C.explored; ctx.fill();
-      }
-      const drawLine = (ln, color, w, frac) => {
-        if (!ln || frac <= 0) return;
+        for (let i = 0; i < n; i++) {
+          const v = order[i];
+          if (skip && skip[v]) continue;
+          const X_ = PX(D.nx[v], D.ny[v]), Y_ = PY(D.nx[v], D.ny[v], lift);
+          ctx.moveTo(X_ + dotR, Y_); ctx.arc(X_, Y_, dotR, 0, 6.2832);
+        }
+        ctx.globalAlpha = alpha; ctx.fillStyle = color; ctx.fill(); ctx.globalAlpha = 1;
+      };
+      dots(R.U.order, C.skipped, A.dOnly, R.A.closed); // Dijkstra's checks that A* never needed
+      dots(R.U.order, C.skipped, A.uAll);
+      dots(R.B.order, C.bfsExplored, A.bDots);
+      dots(R.A.order, C.explored, A.aExp);
+      const drawLine = (ln, color, w, frac, alpha) => {
+        if (!ln || frac <= 0 || alpha < 0.01) return;
         const target = ln.L * frac;
         ctx.beginPath();
         ctx.moveTo(PX(ln.pts[0], ln.pts[1]), PY(ln.pts[0], ln.pts[1], lift));
@@ -246,86 +487,82 @@
           }
           ctx.lineTo(PX(x, y), PY(x, y, lift));
         }
+        ctx.globalAlpha = alpha;
         ctx.lineWidth = w + 4; ctx.strokeStyle = C.routeHalo; ctx.stroke();
         ctx.lineWidth = w; ctx.strokeStyle = color; ctx.stroke();
+        ctx.globalAlpha = 1;
       };
-      const pr = Math.max(0, Math.min(1, (el - tl.reveal) / 1300)), ease = 1 - Math.pow(1 - pr, 3);
-      if (st8.bfs) drawLine(R.bl, C.bfs, 3.5, ease);
-      if (st8.best) drawLine(R.al, C.best, 5, ease);
-      // marker travels the best route
-      if (R.al && el > tl.drawEnd && st8.best) {
-        const q = Math.min(1, (el - tl.drawEnd) / 2800), e2 = q < 0.5 ? 2 * q * q : 1 - Math.pow(-2 * q + 2, 2) / 2;
+      // each route draws once its own search has finished
+      const drawn = (n) => { const p = clamp01((time - n * tm.stepMs) / DRAW_MS); return 1 - Math.pow(1 - p, 3); };
+      drawLine(R.bl, C.bfs, 3.5, drawn(tm.n.B), A.bfs);
+      drawLine(R.al, C.best, 5, drawn(tm.n.A), A.best);
+      // then a marker walks the shortest route
+      const walkFrom = tm.searchEnd + DRAW_MS;
+      if (R.al && time > walkFrom && A.best > 0.5) {
+        const q = Math.min(1, (time - walkFrom) / WALK_MS), e2 = q < 0.5 ? 2 * q * q : 1 - Math.pow(-2 * q + 2, 2) / 2;
         const target = R.al.L * e2; let i = 1;
         while (i < R.al.cum.length - 1 && R.al.cum[i] < target) i++;
         const a = (target - R.al.cum[i - 1]) / (R.al.cum[i] - R.al.cum[i - 1] || 1);
         const x = R.al.pts[2 * i - 2] + (R.al.pts[2 * i] - R.al.pts[2 * i - 2]) * a, y = R.al.pts[2 * i - 1] + (R.al.pts[2 * i + 1] - R.al.pts[2 * i - 1]) * a;
-        const X = PX(x, y), Y = PY(x, y, lift);
-        ctx.beginPath(); ctx.ellipse(X, Y + 2, 8, 3.5, 0, 0, 6.2832); ctx.fillStyle = C.markerShadow; ctx.fill();
-        ctx.beginPath(); ctx.arc(X, Y - 5, 6.5, 0, 6.2832); ctx.fillStyle = C.marker; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.best; ctx.stroke();
+        const X_ = PX(x, y), Y_ = PY(x, y, lift);
+        ctx.beginPath(); ctx.ellipse(X_, Y_ + 2, 8, 3.5, 0, 0, 6.2832); ctx.fillStyle = C.markerShadow; ctx.fill();
+        ctx.beginPath(); ctx.arc(X_, Y_ - 5, 6.5, 0, 6.2832); ctx.fillStyle = C.marker; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.best; ctx.stroke();
       }
       // pins first
-      const sp = [PX(D.nx[st8.start], D.ny[st8.start]), PY(D.nx[st8.start], D.ny[st8.start], lift)];
-      const ep = [PX(D.nx[st8.end], D.ny[st8.end]), PY(D.nx[st8.end], D.ny[st8.end], lift)];
+      const sp = [PX(D.nx[this.start], D.ny[this.start]), PY(D.nx[this.start], D.ny[this.start], lift)];
+      const ep = [PX(D.nx[this.end], D.ny[this.end]), PY(D.nx[this.end], D.ny[this.end], lift)];
       ctx.beginPath(); ctx.arc(sp[0], sp[1], 8, 0, 6.2832); ctx.fillStyle = C.pinFill; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = C.pin; ctx.stroke();
       ctx.beginPath(); ctx.moveTo(ep[0], ep[1]); ctx.lineTo(ep[0], ep[1] - 34); ctx.lineWidth = 2.4; ctx.strokeStyle = C.pin; ctx.stroke();
       ctx.beginPath(); ctx.moveTo(ep[0], ep[1] - 34); ctx.lineTo(ep[0] + 18, ep[1] - 27); ctx.lineTo(ep[0], ep[1] - 20); ctx.closePath(); ctx.fillStyle = C.pin; ctx.fill();
+      // while picking, a crosshair marks the middle of the map, where Enter picks
+      if (this.picking) {
+        ctx.beginPath(); ctx.moveTo(hw - 12, hh); ctx.lineTo(hw - 4, hh); ctx.moveTo(hw + 4, hh); ctx.lineTo(hw + 12, hh);
+        ctx.moveTo(hw, hh - 12); ctx.lineTo(hw, hh - 4); ctx.moveTo(hw, hh + 4); ctx.lineTo(hw, hh + 12);
+        ctx.lineWidth = 4; ctx.strokeStyle = C.halo; ctx.stroke(); ctx.lineWidth = 2; ctx.strokeStyle = C.ink; ctx.stroke();
+      }
       // Then the pins' names, landmarks and streets, in that order. A label
       // that would overlap a pin, a label already placed or a control floating
       // over the map is left out (see ../shared/labels.js).
       const F_PIN = '650 13px Geist, -apple-system, system-ui, sans-serif', F_PL = '650 12.5px Geist, -apple-system, system-ui, sans-serif', F_ST = '500 11px Geist, -apple-system, system-ui, sans-serif';
-      const ATTR = 'Map data © OpenStreetMap contributors';
+      const ATTR = 'Map data © OpenStreetMap contributors', START = 'Start', END = 'Destination';
       const tw = (txt, font) => { const key = font + txt; if (!this.widths.has(key)) { ctx.font = font; this.widths.set(key, ctx.measureText(txt).width); } return this.widths.get(key); };
       const box = (x, y, txt, font, h) => MapLabels.around(x, y, tw(txt, font), h);
       const blockers = [
         { x: sp[0] - 10, y: sp[1] - 10, w: 20, h: 20 },
         { x: ep[0] - 3, y: ep[1] - 36, w: 22, h: 38 },
         { x: W - 14 - tw(ATTR, F_ST), y: H - 22, w: tw(ATTR, F_ST) + 8, h: 18 },
-        ...MapLabels.controlBoxes(this.view.canvas, document.querySelectorAll('.overlay-top button, .overlay-zoom button')),
+        ...MapLabels.controlBoxes(view.canvas, document.querySelectorAll('.map-tl > *, .map-tr > *, .map-bottom > *, .pick-chip, .welcome')),
       ];
       const items = [
-        { txt: 'Start', font: F_PIN, color: C.ink, candidates: [box(sp[0] + 13 + tw('Start', F_PIN) / 2, sp[1], 'Start', F_PIN, 15), box(sp[0] - 13 - tw('Start', F_PIN) / 2, sp[1], 'Start', F_PIN, 15)] },
-        { txt: 'Flag', font: F_PIN, color: C.ink, candidates: [box(ep[0] + 22 + tw('Flag', F_PIN) / 2, ep[1] - 26, 'Flag', F_PIN, 15), box(ep[0] - 6 - tw('Flag', F_PIN) / 2, ep[1] - 26, 'Flag', F_PIN, 15)] },
+        { txt: START, font: F_PIN, color: C.ink, candidates: [box(sp[0] + 13 + tw(START, F_PIN) / 2, sp[1], START, F_PIN, 15), box(sp[0] - 13 - tw(START, F_PIN) / 2, sp[1], START, F_PIN, 15)] },
+        { txt: END, font: F_PIN, color: C.ink, candidates: [box(ep[0] + 22 + tw(END, F_PIN) / 2, ep[1] - 26, END, F_PIN, 15), box(ep[0] - 6 - tw(END, F_PIN) / 2, ep[1] - 26, END, F_PIN, 15)] },
       ];
-      const onScreen = (X, Y) => X > -40 && X < W + 40 && Y > -20 && Y < H + 20;
+      const onScreen = (x, y) => x > -40 && x < W + 40 && y > -20 && y < H + 20;
       D.pl.forEach(([nm, x, y]) => {
-        const X = PX(x / 2, y / 2), Y = PY(x / 2, y / 2, nm === 'Adelaide Oval' ? 40 : 6);
-        if (onScreen(X, Y)) items.push({ txt: nm, font: F_PL, color: nm === 'River Torrens' ? C.river : C.ink, candidates: [box(X, Y, nm, F_PL, 15), box(X, Y - 17, nm, F_PL, 15), box(X, Y + 17, nm, F_PL, 15)] });
+        const X_ = PX(x / 2, y / 2), Y_ = PY(x / 2, y / 2, nm === 'Adelaide Oval' ? 40 : 6);
+        if (onScreen(X_, Y_)) items.push({ txt: nm, font: F_PL, color: nm === 'River Torrens' ? C.river : C.ink, candidates: [box(X_, Y_, nm, F_PL, 15), box(X_, Y_ - 17, nm, F_PL, 15), box(X_, Y_ + 17, nm, F_PL, 15)] });
       });
       if (k > 0.33) D.st.forEach(([nm, x, y]) => {
-        const X = PX(x / 2, y / 2), Y = PY(x / 2, y / 2, 0);
-        if (onScreen(X, Y)) items.push({ txt: nm, font: F_ST, color: C.street, candidates: [box(X, Y, nm, F_ST, 13)] });
+        const X_ = PX(x / 2, y / 2), Y_ = PY(x / 2, y / 2, 0);
+        if (onScreen(X_, Y_)) items.push({ txt: nm, font: F_ST, color: C.street, candidates: [box(X_, Y_, nm, F_ST, 13)] });
       });
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; ctx.lineWidth = 4;
       for (const { item, box: b } of MapLabels.place(items, blockers, { x: 0, y: 0, w: W, h: H })) {
-        const X = b.x + b.w / 2, Y = b.y + b.h / 2;
-        ctx.font = item.font; ctx.strokeStyle = item.font === F_ST ? C.streetHalo : C.halo; ctx.strokeText(item.txt, X, Y);
-        ctx.fillStyle = item.color; ctx.fillText(item.txt, X, Y);
+        const X_ = b.x + b.w / 2, Y_ = b.y + b.h / 2;
+        ctx.font = item.font; ctx.strokeStyle = item.font === F_ST ? C.streetHalo : C.halo; ctx.strokeText(item.txt, X_, Y_);
+        ctx.fillStyle = item.color; ctx.fillText(item.txt, X_, Y_);
       }
-      ctx.textAlign = 'right'; ctx.font = '500 11px Geist, -apple-system, system-ui, sans-serif'; ctx.lineWidth = 4; ctx.strokeStyle = C.streetHalo; ctx.strokeText(ATTR, W - 10, H - 12);
+      ctx.textAlign = 'right'; ctx.font = F_ST; ctx.lineWidth = 4; ctx.strokeStyle = C.streetHalo; ctx.strokeText(ATTR, W - 10, H - 12);
       ctx.fillStyle = C.attr;
       ctx.fillText(ATTR, W - 10, H - 12);
     }
-    // A click on the map (X, Y in canvas pixels) moves a pin to the nearest junction.
-    pick(X, Y) {
-      const D = this.D;
-      let best = -1, bd = 26 * 26;
-      for (let i = 0; i < D.N; i++) {
-        const p = this.view.P(D.nx[i], D.ny[i], 1.5);
-        const d = (p[0] - X) ** 2 + (p[1] - Y) ** 2;
-        if (d < bd) { bd = d; best = i; }
-      }
-      if (best < 0) { this.setState({ note: 'No street there. Click closer to a road or path.' }); return; }
-      this.movePin(best);
-    }
   }
 
-  // Size the map before the data arrives, so nothing jumps when it appears.
-  const mapHeight = (w) => Math.round(Math.min(Math.max(w * 0.66, 420), 760));
-  const sizeEarly = () => { const c = $('cv'); if (!window.app) c.style.height = mapHeight(c.parentElement.clientWidth) + 'px'; };
-  sizeEarly();
-  addEventListener('resize', sizeEarly);
   fetch(DATA)
     .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then((raw) => { $('loading').remove(); window.app = new MapApp(raw); })
-    .catch(() => { $('loading').textContent = 'Could not load the map data. Serve the docs folder over HTTP (python -m http.server) rather than opening the file directly.'; });
+    .catch((err) => {
+      console.error(err);
+      $('loading').textContent = 'Could not load the map data. Serve the docs folder over HTTP (python -m http.server) rather than opening the file directly.';
+    });
 })();

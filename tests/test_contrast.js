@@ -33,6 +33,8 @@ const PAIRS = [
   ["callout-ink", "callout-bg", TEXT], ["callout-dim", "callout-bg", TEXT],
   ["edge", "surface", EDGE], ["edge", "bg", EDGE], ["edge", "chip-off", EDGE],
   ["focus", "surface", EDGE], ["focus", "bg", EDGE], ["primary-bg", "surface", EDGE],
+  // the search lists' highlighted option, and a pressed "Pick on map" button
+  ["dim", "seg-bg", TEXT], ["surface", "focus", EDGE],
 ];
 
 let fails = 0, checks = 0;

@@ -1,37 +1,66 @@
-/* Adelaide page layout. Colours, the header, buttons, chips and cards come from ../shared/theme.css. */
-.body {
-  display: flex;
-  gap: 20px;
-  align-items: flex-start;
-  max-width: 1480px;
-  margin: 0 auto;
-  padding: 20px 24px 24px;
-}
-.stage {
-  flex: 1 1 640px;
-  min-width: 0;
+/*
+ * Adelaide page layout. Colours, the header, buttons, the panel's steps,
+ * the search boxes, popovers and the timeline bar come from ../shared/theme.css.
+ *
+ * From 1024 px wide the map fills the left of the window and the panel sits
+ * on the right, 400 px wide, scrolling on its own; the page itself does not
+ * scroll. Narrower, the map sits above the panel.
+ */
+.app {
   display: flex;
   flex-direction: column;
-  gap: 12px;
 }
-.map {
-  position: relative;
-  min-width: 0;
-  overflow: hidden;
-  border-radius: 18px;
-  border: 1px solid var(--line);
+.panel {
+  order: 2;
   background: var(--surface);
 }
-/* map.js sets the height before the data arrives, so nothing jumps */
+.map {
+  order: 1;
+  position: relative;
+  height: clamp(420px, 66vw, 760px);
+  background: var(--bg);
+}
+@media (min-width: 1024px) {
+  body {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+  .app {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 400px;
+  }
+  .map {
+    grid-area: 1 / 1;
+    height: auto;
+    min-height: 0;
+  }
+  .panel {
+    grid-area: 1 / 2;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-left: 1px solid var(--line);
+  }
+}
+
+/* ---------- the map ---------- */
 .map canvas {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
-  height: 420px;
+  height: 100%;
   touch-action: none;
   cursor: grab;
 }
 .map canvas:active {
   cursor: grabbing;
+}
+.map canvas.picking {
+  cursor: crosshair;
 }
 .map canvas:focus-visible {
   outline-offset: -3px;
@@ -42,29 +71,137 @@
   display: grid;
   place-items: center;
   margin: 0;
-  background: var(--surface);
+  padding: 24px;
+  text-align: center;
+  background: var(--bg);
   color: var(--dim);
   font-weight: 500;
 }
-.overlay-top {
+/* buttons floating over the map get a shadow to lift them off it */
+.map-btn,
+.map .seg {
+  box-shadow: var(--shadow);
+}
+.map-tl {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+}
+.map-tr {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+}
+.about {
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(360px, calc(100vw - 60px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.about h2 {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+.about p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.pick-chip {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 200px);
+  margin: 0;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--tip-bg);
+  color: var(--tip-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: var(--pop-shadow);
+}
+.pick-chip small {
+  font-size: 12px;
+  font-weight: 500;
+}
+/* Layers, the timeline and the map buttons share the bottom edge; the map credit sits under them. */
+.map-bottom {
   position: absolute;
   left: 14px;
   right: 14px;
-  top: 14px;
+  bottom: 26px;
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 8px;
+  align-items: flex-end;
+  gap: 12px;
   pointer-events: none;
 }
-.overlay-top > * {
+.map-bottom > * {
   pointer-events: auto;
 }
-.chips,
-.right {
+.layers {
+  position: relative;
+  flex: none;
+}
+.layers .pop {
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: 250px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 8px;
+}
+.layers legend {
+  float: left; /* keeps the legend inside the box */
+  width: 100%;
+  padding: 2px 8px 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dim);
+}
+.lay {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.lay:hover {
+  background: var(--seg-bg);
+}
+.lay input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--ink);
+}
+.timeline-bar {
+  flex: 1 1 auto;
+  max-width: 620px;
+  margin: 0 auto;
+}
+.ctl-stack {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ctl-stack .btn {
+  font-size: 18px;
+  line-height: 1;
+}
+.sw {
+  flex: none;
+  display: inline-block;
 }
 .sw-dot {
   width: 9px;
@@ -89,132 +226,197 @@
   height: 4px;
   background: var(--astar);
 }
-.overlay-zoom {
+
+/* the first-visit card, over the middle of the map */
+.welcome {
   position: absolute;
-  left: 14px;
-  bottom: 14px;
+  z-index: 40;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(440px, calc(100% - 32px));
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 24px 26px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--pop-shadow);
 }
-.overlay-zoom .btn {
+.welcome h2 {
+  margin: 0;
+  padding-right: 28px;
   font-size: 18px;
-  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
 }
-.pins {
+.welcome p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.welcome .close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  border-color: transparent;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .welcome:not([hidden]) {
+    animation: welcome-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}
+@keyframes welcome-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px));
+  }
+}
+
+/* ---------- the panel ---------- */
+.panel-head {
+  padding: 18px 20px 14px;
+}
+.panel-head h1 {
+  margin: 0 0 4px;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.panel-head p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+/* From and To, each with its "Pick on map" button, and the swap button beside both */
+.walk {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 40px 36px;
+  align-items: center;
+  gap: 8px 6px;
+}
+.walk label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.walk .btn.sq {
+  width: 40px;
+  min-height: 40px;
+}
+.walk [aria-pressed="true"] {
+  border-color: var(--focus);
+  background: var(--focus);
+  color: var(--surface);
+}
+.walk .swap {
+  grid-column: 4;
+  grid-row: 1 / span 2;
+  width: 36px !important;
+  border-color: transparent;
+}
+.actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px 14px;
-}
-.jump {
-  display: inline-flex;
-  align-items: center;
   gap: 8px;
-  font-size: 13px;
-  color: var(--ink-2);
 }
-.jump select {
-  min-height: 36px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1px solid var(--edge);
-  background: var(--surface);
-  font-size: 13px;
-  font-weight: 600;
+.actions .primary {
+  min-height: 40px;
+  padding: 0 20px;
 }
 .hint {
   margin: 0;
-  font-size: 13.5px;
-  font-weight: 500;
-}
-.help {
-  margin: 0;
+  min-height: 1.45em;
   font-size: 13px;
   color: var(--dim);
 }
-
-.side {
-  flex: 0 1 380px;
-  min-width: 280px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+.hint:empty {
+  display: none;
 }
-.intro h1 {
-  margin: 0 0 4px;
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
-.intro p {
-  margin: 0;
-  max-width: 70ch;
-  color: var(--ink-2);
-  font-size: 15px;
-}
-.side .headline {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
-#summary {
-  min-height: 5.8em; /* room for the summary before the data arrives */
-}
-.small {
-  font-size: 13px;
+.term {
+  white-space: nowrap;
 }
 .tiny {
+  margin: 0;
   font-size: 12px;
   color: var(--dim);
 }
-.rows {
-  gap: 0;
-  padding: 6px 18px;
-}
-.row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: baseline;
-  gap: 4px 14px;
-  padding: 12px 0;
-}
-.row + .row {
-  border-top: 1px solid var(--line);
-}
-.walk {
-  font-size: 13px;
-  color: var(--ink-2);
-}
-.row .sub {
-  grid-column: 1 / -1;
-  font-size: 12.5px;
-}
-.assume {
-  margin: 4px 0 10px !important;
-}
-.points {
-  margin: 0;
-  padding-left: 1.3em;
+
+/* one card per search; hover or focus shows that search on the map, a click keeps it there */
+.cards {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  font-size: 13.5px;
-  color: var(--ink-2);
 }
-.points b {
-  color: var(--ink);
+.rc {
+  --c: var(--astar);
+  position: relative;
+  padding: 11px 14px 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+  transition:
+    border-color 220ms ease,
+    box-shadow 220ms ease;
 }
-.nm {
+.rc[data-alg="U"] {
+  --c: var(--dijkstra);
+}
+.rc[data-alg="B"] {
+  --c: var(--bfs);
+}
+.rc:hover,
+.rc:focus-within {
+  border-color: var(--edge);
+  box-shadow: var(--shadow);
+}
+.rc:has([aria-pressed="true"]) {
+  border-color: var(--c);
+  box-shadow: inset 0 0 0 1px var(--c);
+}
+.rc:has(.rc-pin:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.rc-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 600;
+}
+.rc-pin {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+}
+.rc-pin:focus-visible {
+  outline: none;
+}
+/* no press shrink here: a transform would shrink the card-sized click area to the button mid-click */
+.rc-pin:active {
+  transform: none;
+}
+/* the whole card is the button; the "?" sits above it */
+.rc-pin::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.rc .qtip {
+  z-index: 1;
 }
 .k {
+  flex: none;
   display: inline-block;
   width: 10px;
   height: 10px;
@@ -229,50 +431,161 @@
 .k.s {
   background: var(--astar);
 }
-.grid-link .btn {
-  align-self: flex-start;
-  text-decoration: none;
+.rc-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin: 6px 0 0;
+}
+.rc-time {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.rc-dist {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.rc-meta {
+  flex-basis: 100%;
+  font-size: 12.5px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+/* how far this search has got in the replay */
+.rc-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 3px;
+  background: var(--c);
+  transform: scaleX(var(--p, 1));
+  transform-origin: left;
 }
 
-@media (max-width: 900px) {
-  .body {
-    flex-direction: column;
-    align-items: stretch;
-    padding: 12px;
-  }
-  .stage {
-    flex: none;
-    width: 100%;
-  }
+.insight {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+.learn {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.learn summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 14px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+.learn summary::-webkit-details-marker {
+  display: none;
+}
+.learn summary::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 200ms ease;
+}
+.learn[open] summary::before {
+  transform: rotate(45deg);
+}
+.learn > :not(summary) {
+  margin-left: 14px;
+  margin-right: 14px;
+}
+.learn h3 {
+  margin-top: 12px;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+.learn p {
+  margin-top: 0;
+  margin-bottom: 0;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+.learn .btn {
+  margin-top: 10px;
+  margin-bottom: 14px;
+  text-decoration: none;
+}
+.points {
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-left: 1.3em;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+.points b {
+  color: var(--ink);
+}
+
+/* the "Start with an example" tour outlines one step at a time */
+.step.touring {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+.tour {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  background: var(--tip-bg);
+  color: var(--tip-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.tour .btn {
+  flex: none;
+  border-color: var(--tip-ink);
+  background: transparent;
+  color: var(--tip-ink);
+}
+
+@media (max-width: 1023px) {
   .map canvas {
     cursor: default;
   }
-  .side {
-    flex: 1 1 auto;
-    width: 100%;
-    min-width: 0;
-  }
 }
-/* Below 1200 px the layer chips and the 2D/3D and Replay controls move into a bar above the map. */
-@media (max-width: 1199px) {
+/* Phones, until the bottom sheet: a taller map, the timeline on its own row
+   and the map buttons in two columns. */
+@media (max-width: 767px) {
   .map {
-    display: flex;
-    flex-direction: column;
+    height: max(480px, 72svh);
   }
-  .overlay-top {
-    position: static;
-    order: -1;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--line);
-    background: var(--surface);
+  .map-bottom {
+    flex-wrap: wrap;
   }
-  .chips {
-    flex: 1 1 320px;
+  .timeline-bar {
+    order: 3;
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .tl-label {
     min-width: 0;
-    flex-wrap: nowrap;
-    overflow-x: auto;
   }
-  .right {
-    flex: none;
+  .ctl-stack {
+    display: grid;
+    grid-template-columns: repeat(2, 36px);
+    margin-left: auto;
   }
 }

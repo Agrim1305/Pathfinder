@@ -50,6 +50,11 @@ bumped on every change, so a browser never mixes a cached old file with a new on
   choice in localStorage and the URL hash, and fades colours for 300 ms (at once under
   reduced motion). The canvases listen and fade their own palettes. `tests/test_contrast.js`
   checks every text and control colour, and the map label colours, against WCAG AA.
+- **Page controls, `ui.js`.** A search box with a list that follows the ARIA combobox
+  pattern (arrows move through the matches, Enter picks, Escape puts the chosen value
+  back), popovers that close on Escape or a click elsewhere, "?" toggletips whose bubble is
+  a live region, and the timeline bar (play or pause, a scrubber and "Step k of N"). The
+  page owns the clock; the bar only shows it and reports clicks.
 - **`scroll.js`** marks rows that scroll sideways on narrow screens, so CSS can fade out the
   edge with more to see.
 
@@ -198,7 +203,33 @@ length (tenths of a metre, unrounded) in each segment's third field; `graph.js` 
 ### 5. The page
 
 `docs/index.html` loads the map data with `<link rel="preload">`, so it downloads alongside
-the scripts, and sizes the map before the data arrives, so nothing jumps when it appears.
+the scripts. CSS sizes the map before the data arrives, so nothing jumps when it appears.
+
+From 1024 px wide the map fills the left of the window and a 400 px panel on the right
+scrolls on its own; the page itself never scrolls. The panel has three numbered steps:
+
+1. **Choose your walk.** From and To search the 11 landmarks and every named street
+   (`text.js`: names that start with what you typed, then a word that does, then the rest;
+   places first). A street starts at its junction nearest the street's middle. "Pick on map"
+   turns the cursor into a crosshair until a click (Enter picks the middle of the map,
+   Escape cancels); a plain click on the map sets the start, then the destination. A pin
+   set on the map is named after the nearest named street ("Grenfell St") or landmark
+   ("near Rundle Mall") within 60 m, or else "a path near" the nearest named street. Any new
+   walk runs the searches and replays them at once; "Find routes" replays and reframes.
+2. **Compare the routes.** One card per search. Pointing at a card, or focusing it, fades
+   the other layers back on the map and shows that search's junctions and route; a click
+   keeps it there until a second click.
+3. **What just happened.** One sentence built from the run, then "Learn how it works",
+   closed at first and remembered in localStorage.
+
+The replay takes about 7 seconds whatever the junction counts: the three searches race at
+one junction per step for 4.5 s (at most 40 ms a step), each route draws in 0.9 s once its
+own search finishes, then a marker walks the shortest route. Steps advance with elapsed
+time, not one per frame, so A\* visibly finishes first. A first visit shows a welcome card
+(remembered in localStorage); "Start with an example" plays the example walk and outlines
+each step for 1.5 s, except under reduced motion. `tools/check_layout.js` checks the fit
+in headless Chrome at 1440 x 900 and 1920 x 1080, in both themes, on a first and a return
+visit.
 `docs/adelaide/palette.js` holds the map's light and dark colours; the page fades between
 them with the theme. `docs/adelaide/index.html` forwards old links to the front page, and the
 front page sends old grid links (`#view=`, `#map=`) on to `grid/`.

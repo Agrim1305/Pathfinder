@@ -32,11 +32,15 @@ Every number on screen comes from a real run of the three searches. Light and da
 follow your system, and the button in the header cycles System, Light and Dark.
 
 **Adelaide CBD**, the front page: BFS, Dijkstra and A\* on the real walking network, in 2D
-or 3D. Click the map to move the start or the flag.
+or 3D. The map fills the window and a panel beside it walks through three steps: choose
+your walk (search for a place or street, or pick on the map), compare the routes (one card
+per search: walking time, distance, junctions checked and search time; point at a card to
+see its search on the map) and what just happened. A first visit opens with a short
+example.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/adelaide-dark.png">
-  <img alt="Adelaide CBD in 3D: the BFS route uses fewer street segments but walks 484 m further than the shortest route" src="docs/screenshots/adelaide-light.png">
+  <img alt="Adelaide CBD in 3D beside the three-step panel: A* and Dijkstra find the same 20 min walk, A* checking 314 junctions to Dijkstra's 2,979, and the BFS route is 5 min longer" src="docs/screenshots/adelaide-light.png">
 </picture>
 
 **Grid 2D**: the same searches on a hilly grid. Scrub through every step, hover a cell for
@@ -117,9 +121,12 @@ What the numbers show:
 
 **[Open the Adelaide map](https://agrim1305.github.io/Pathfinder/)**, the front page of the site (screenshot above).
 
+![A first visit: the welcome card, the example walk with each step of the panel outlined in turn while the three searches race, then Central Market typed in as the destination, and the Dijkstra card pointed at to show the junctions it checked](docs/screenshots/first-visit.gif)
+
 BFS, Dijkstra and A\* also run on the real walking network of Adelaide's city centre: 7,539
 junctions and 11,602 street and path segments from OpenStreetMap, with 4,799 buildings
-drawn in 2D or 3D. Click the map to move the start or the flag, and all three searches run again.
+drawn in 2D or 3D. Choose a start and a destination by name or on the map, and all three
+searches run again and race on a timeline of about 7 seconds.
 
 - Tests check all three against NetworkX on 300 random walks. Dijkstra and A\* match the
   shortest distance exactly, and BFS matches the fewest-segment count. Across those walks
@@ -175,7 +182,10 @@ the page, such as the cells A\* skipped), `test_terrain.js`, `test_view.js` (the
 camera), `test_labels.js` (map labels never overlap each other, a pin or a control),
 `test_generate.js` (a seed always gives the same random map, with the pins connected),
 `test_claims.js` (the figures quoted on the site, such as "77% fewer junctions", match a fresh
-measurement) and `test_contrast.js` (every text and control colour meets WCAG AA in both themes).
+measurement), `test_text.js` (the Adelaide pin names, place search and summary sentence) and
+`test_contrast.js` (every text and control colour meets WCAG AA in both themes).
+`node tools/check_layout.js http://localhost:8000/` checks in headless Chrome that the front
+page fits one screen at 1440 x 900 and 1920 x 1080 in both themes.
 GitHub Actions runs them all on every push. The Adelaide tests need Node and NetworkX
 (`pip install -r tools/requirements.txt`) and skip themselves without them; CI installs both
 and fails if they skip. The grid tests check that:
@@ -221,15 +231,16 @@ pathfinder.py        search algorithms, cost model and command-line interface
 benchmark.py         compares every algorithm on every map
 visualize.py         draws the README images (needs matplotlib)
 docs/index.html      the front page: the Adelaide CBD map
-docs/adelaide/       Adelaide code and data: graph.js (searches), map.js (2D and 3D map)
+docs/adelaide/       Adelaide code and data: graph.js (searches), map.js (2D and 3D map),
+                     text.js (pin names, place search, summary sentence)
 docs/grid/           the grid demo: Grid 2D, Grid 3D and Step through
 docs/                shared engine files (pathfinder.js, terrain.js, runs.js, generate.js)
-docs/shared/         camera, theme, labels and other code both pages use
+docs/shared/         camera, theme, labels, search boxes, popovers, timeline and other shared code
 example.py           using the module from Python
 generate_maps.py     builds the test maps
 maps/                six maps, from a 5×5 demo to a 20×20 random terrain, plus the browser demo map
 tests/               unit tests, the browser check and the NetworkX check
-tools/               downloads and prepares the Adelaide OpenStreetMap data
+tools/               downloads and prepares the Adelaide OpenStreetMap data; checks the page layout
 ARCHITECTURE.md      how the pieces fit together
 ```
 
