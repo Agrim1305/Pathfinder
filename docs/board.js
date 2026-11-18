@@ -76,7 +76,7 @@
     ctx.fillStyle = stage;
     ctx.fillRect(0, 0, W, H);
     const surface = view.cam.tilt > 1e-3 && root.Grid3D ? root.Grid3D.surface : flatSurface;
-    surface(ctx, view, s, P0);
+    const linesDrawn = surface(ctx, view, s, P0); // the 3D surface draws its own grid and contours
 
     // survey grid along cell edges, following the ground
     const path = (pts) => pts.forEach(([u, v], i) => (i ? ctx.lineTo(...P(u, v)) : ctx.moveTo(...P(u, v))));
@@ -85,14 +85,16 @@
       for (let i = 0; i <= n; i++) pts.push([u0 + ((u1 - u0) * i) / n, v0 + ((v1 - v0) * i) / n]);
       path(pts);
     };
-    ctx.beginPath();
-    for (let r = 0; r <= rows; r++) edge(0, r, cols, r);
-    for (let c = 0; c <= cols; c++) edge(c, 0, c, rows);
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = st.grid;
-    ctx.stroke();
+    if (!linesDrawn) {
+      ctx.beginPath();
+      for (let r = 0; r <= rows; r++) edge(0, r, cols, r);
+      for (let c = 0; c <= cols; c++) edge(c, 0, c, rows);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = st.grid;
+      ctx.stroke();
+    }
 
-    if (st.contour) {
+    if (st.contour && !linesDrawn) {
       ctx.beginPath();
       for (const [L, seg] of contourLines(t)) {
         const zl = L * t.zScale;
@@ -171,22 +173,27 @@
       ctx.restore();
     }
 
-    // A* explored: a dot on every cell A* has taken off its queue so far.
+    // A* explored: a disc on every cell A* has taken off its queue so far. Discs
+    // lie on the ground (flattened when the camera tilts) and rise in quickly as
+    // they are reached, unless motion is reduced.
     const A = R.astar, kA = kOf("astar"), dot = Math.max(2, Math.min(6, cellPx * 0.11));
+    const flat = Math.max(0.5, Math.cos(view.cam.tilt)), RISE = 2.5;
     if (s.layers.explored && kA > 0) {
       ctx.beginPath();
       for (let i = 0; i < kA; i++) {
         if (A.trace[i].stale) continue;
-        const [X, Y] = centre(A.trace[i].node, 0.02);
-        ctx.moveTo(X + dot, Y);
-        ctx.arc(X, Y, dot, 0, 2 * Math.PI);
+        const grow = s.rise ? Math.min(1, (s.kf - i) / RISE) : 1;
+        const [X, Y] = centre(A.trace[i].node, 0.02 + (1 - grow) * 0.4);
+        const r = dot * Math.max(0.2, grow);
+        ctx.moveTo(X + r, Y);
+        ctx.ellipse(X, Y, r, r * flat, 0, 0, 2 * Math.PI);
       }
       ctx.fillStyle = col("astar");
       ctx.fill();
       if (kA < A.nodes) {
-        const [X, Y] = centre(A.trace[kA - 1].node, 0.02);
+        const [X, Y] = centre(A.trace[kA - 1].node, 0.02), r = Math.max(7, cellPx * 0.3);
         ctx.beginPath();
-        ctx.arc(X, Y, Math.max(7, cellPx * 0.3), 0, 2 * Math.PI);
+        ctx.ellipse(X, Y, r, r * flat, 0, 0, 2 * Math.PI);
         ctx.lineWidth = 2.5;
         ctx.strokeStyle = col("astar");
         ctx.stroke();
@@ -244,7 +251,7 @@
     const pinR = Math.max(7, Math.min(15, cellPx * 0.3));
     const [sx, sy] = centre(s.start, 0.05);
     ctx.beginPath();
-    ctx.arc(sx, sy, pinR, 0, 2 * Math.PI);
+    ctx.ellipse(sx, sy, pinR, pinR * flat, 0, 0, 2 * Math.PI);
     ctx.setLineDash([4, 3]);
     ctx.lineWidth = 2.2;
     ctx.strokeStyle = ink;
@@ -289,17 +296,24 @@
       ...(s.labels || []).map((L) => ({
         L,
         text: L.text,
-        candidates: L.at.map(([u, v]) => {
-          const [X, Y] = P(u, v, L.lift || 0);
-          return at(X, L.leader ? Y - 34 : Y, L.text);
-        }),
+        // First on the spot itself (unless the label always has a leader), then
+        // standing off on a leader line: higher, or to either side.
+        candidates: (() => {
+          const w = ctx.measureText(L.text).width / 2 + 10;
+          const anchors = L.at.map(([u, v]) => P(u, v, L.lift || 0));
+          const on = L.leader ? [] : anchors.map(([X, Y]) => at(X, Y, L.text));
+          const off = anchors.slice(0, 8).flatMap(([X, Y]) =>
+            [[0, -34], [0, -58], [0, -82], [-w, -46], [w, -46], [-w, 0], [w, 0]].map(([dx, dy]) => Object.assign(at(X + dx, Y + dy, L.text), { ax: X, ay: Y, lead: true })),
+          );
+          return on.concat(off);
+        })(),
       })),
     ];
     for (const { item, box } of MapLabels.place(items, blockers, { x: 0, y: 0, w: W, h: H })) {
       const X = box.x + box.w / 2, Y = box.y + box.h / 2, L = item.L;
-      if (L && L.leader) {
+      if (box.lead) {
         ctx.beginPath();
-        ctx.moveTo(X, Y + 34);
+        ctx.moveTo(box.ax, box.ay);
         ctx.lineTo(X, box.y + box.h);
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = ink;

@@ -8,22 +8,23 @@
       name="description"
       content="Watch BFS, Dijkstra and A* search hilly ground for the lowest-effort route, with every number from a real run."
     />
-    <script src="shared/theme.js?v=13"></script>
+    <script src="shared/theme.js?v=19"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
     />
-    <link rel="stylesheet" href="shared/theme.css?v=13" />
-    <link rel="stylesheet" href="styles.css?v=13" />
+    <link rel="stylesheet" href="shared/theme.css?v=19" />
+    <link rel="stylesheet" href="styles.css?v=19" />
   </head>
   <body>
     <header class="top">
       <a class="brand" href="./"><b>Pathfinder</b><span>Search algorithms, made visible</span></a>
       <div class="top-controls scroll-x">
         <nav class="seg" aria-label="View">
-          <a href="#view=2d" aria-current="page">Grid 2D</a>
+          <button type="button" data-view="2d" aria-pressed="true">Grid 2D</button>
+          <button type="button" data-view="3d" aria-pressed="false">Grid 3D</button>
           <a href="adelaide/">Adelaide CBD</a>
         </nav>
         <label class="top-label" for="map">Map</label>
@@ -45,7 +46,7 @@
             id="cv"
             tabindex="0"
             role="img"
-            aria-label="Map of the board: hills, the creek, the start and the flag, with what A* explored and both routes drawn on top. Arrow keys move the map and the ring at its centre, Enter uses the selected tool on that cell, plus and minus zoom."
+            aria-label="Map of the board: hills, the creek, the start and the flag, with what A* explored and both routes drawn on top. In Grid 3D, drag to turn it. Arrow keys move the map and the ring at its centre, Enter uses the selected tool on that cell, plus and minus zoom."
           ></canvas>
           <div class="overlay-top">
             <div class="chips scroll-x" role="group" aria-label="Map layers">
@@ -77,6 +78,12 @@
           </div>
           <button type="button" class="btn" id="resetPins">Reset pins</button>
           <button type="button" class="btn" id="resetMap" hidden>Reset map</button>
+          <div class="style-pick">
+            <button type="button" class="btn" id="styleBtn" aria-expanded="false" aria-controls="styleMenu">
+              <span class="sws" id="styleSw" aria-hidden="true"></span><span id="styleName">Map style</span>
+            </button>
+            <div class="style-menu" id="styleMenu" role="group" aria-label="Map style" hidden></div>
+          </div>
         </div>
         <p class="hint" id="hint" aria-live="polite"></p>
 
@@ -128,14 +135,15 @@
       </aside>
     </div>
 
-    <script src="pathfinder.js?v=13"></script>
-    <script src="maps.js?v=13"></script>
-    <script src="terrain.js?v=13"></script>
-    <script src="runs.js?v=13"></script>
-    <script src="shared/view.js?v=13"></script>
-    <script src="shared/labels.js?v=13"></script>
-    <script src="shared/scroll.js?v=13"></script>
-    <script src="board.js?v=13"></script>
-    <script src="app.js?v=13"></script>
+    <script src="pathfinder.js?v=19"></script>
+    <script src="maps.js?v=19"></script>
+    <script src="terrain.js?v=19"></script>
+    <script src="runs.js?v=19"></script>
+    <script src="shared/view.js?v=19"></script>
+    <script src="shared/labels.js?v=19"></script>
+    <script src="shared/scroll.js?v=19"></script>
+    <script src="board.js?v=19"></script>
+    <script src="grid3d.js?v=19"></script>
+    <script src="app.js?v=19"></script>
   </body>
 </html>

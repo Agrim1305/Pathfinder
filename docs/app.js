@@ -9,7 +9,9 @@
   const $ = (id) => document.getElementById(id);
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const MAPS = { detour: "Detour", choice: "Choice", small: "Small", maze: "Maze", open: "Open field", large: "Large" };
-  const DRAW_MS = 1200, WALK_MS = 2400, FADE_MS = 300;
+  const DRAW_MS = 1200, WALK_MS = 2400, THEME_FADE_MS = 300, STYLE_FADE_MS = 400;
+  const PAINT = ["creek", "raise", "lower"]; // editing tools, Grid 2D only
+  const POSE_3D = { th: -0.62, tilt: 0.98 };
   const HINTS = {
     start: "Click a dry cell to move the start, or drag a pin.",
     end: "Click a dry cell to move the flag, or drag a pin.",
@@ -23,9 +25,10 @@
     layers: { explored: true, skipped: false, bfs: true, best: true, numbers: false },
     t: 0, playing: false, last: 0,
     hover: null, focus: null,
-    style: "terrain", fromStyle: "terrain", fadeStart: 0,
+    view: "2d", styleChoice: "auto", style: "terrain", fromStyle: "terrain", fadeStart: 0, fadeMs: THEME_FADE_MS,
   };
   let R = null, terrain = null, terrainKey = "", labels = [], view = null, lastHash = "";
+  let camKey = "", camMoved = 0; // when the camera last moved, for the lighter 3D surface
 
   const rows = () => S.grid.length, cols = () => S.grid[0].length;
   const same = (a, b) => a[0] === b[0] && a[1] === b[1];
@@ -69,7 +72,7 @@
       // only rebuild the landscape when the ground changed, not when a pin moved
       terrainKey = key;
       terrain = T.buildTerrain(S.grid);
-      labels = creekLabel();
+      labels = mapLabels();
     }
     R = Runs.solve(S.grid, S.start, S.end);
     renderResults();
@@ -100,6 +103,16 @@
     return [{ text: "Creek, impassable", water: true, at: spots.slice(0, 60) }];
   }
 
+  // "Hill, elevation 9" on the highest ground, with a leader line, in 3D only.
+  function hillLabel() {
+    const top = Math.max(...S.grid.flat());
+    if (top < 1) return [];
+    const at = [];
+    S.grid.forEach((row, r) => row.forEach((v, c) => v === top && at.push([c + 0.5, r + 0.5])));
+    return [{ text: `Hill, elevation ${top}`, leader: true, lift: 0.05, at }];
+  }
+  const mapLabels = () => creekLabel().concat(S.view === "3d" ? hillLabel() : []);
+
   function loadMap(name, keep = {}) {
     S.map = MAPS[name] ? name : "detour";
     S.base = PF.parseMap(window.PATHFINDER_MAPS[S.map]);
@@ -125,6 +138,8 @@
   }
   function readHash() {
     const p = new URLSearchParams(location.hash.slice(1));
+    S.view = p.get("view") === "3d" ? "3d" : "2d";
+    S.styleChoice = T.STYLES[p.get("style")] ? p.get("style") : "auto";
     const name = MAPS[p.get("map")] ? p.get("map") : "detour";
     const base = PF.parseMap(window.PATHFINDER_MAPS[name]);
     const grid = decodeGrid(p.get("g"), base) || base.grid.map((row) => row.slice());
@@ -135,7 +150,9 @@
   }
   function writeHash() {
     const p = new URLSearchParams(location.hash.slice(1));
-    p.set("view", "2d");
+    p.set("view", S.view);
+    if (S.styleChoice === "auto") p.delete("style");
+    else p.set("style", S.styleChoice);
     p.set("map", S.map);
     p.set("s", S.start.join("-"));
     p.set("e", S.end.join("-"));
@@ -146,9 +163,22 @@
   }
 
   // ---------- clicking, dragging and painting cells ----------
-  function cellAt(X, Y) {
-    const [u, v] = view.unP(X, Y), r = Math.floor(v), c = Math.floor(u);
-    return r >= 0 && r < rows() && c >= 0 && c < cols() ? [r, c] : null;
+  // In 2D, the cell under the point. In 3D the ground is not flat, so take the
+  // cell whose centre is nearest on screen (only dry cells when placing a pin).
+  function cellAt(X, Y, dryOnly) {
+    if (view.cam.tilt < 0.01) {
+      const [u, v] = view.unP(X, Y), r = Math.floor(v), c = Math.floor(u);
+      return r >= 0 && r < rows() && c >= 0 && c < cols() ? [r, c] : null;
+    }
+    let best = null, bd = view.cam.k ** 2;
+    for (let r = 0; r < rows(); r++)
+      for (let c = 0; c < cols(); c++) {
+        if (dryOnly && S.grid[r][c] === -1) continue;
+        const [x, y] = view.P(c + 0.5, r + 0.5, terrain.heightAt(c + 0.5, r + 0.5) * terrain.zScale);
+        const d = (x - X) ** 2 + (y - Y) ** 2;
+        if (d < bd) (bd = d), (best = [r, c]);
+      }
+    return best;
   }
   function note(text) {
     S.note = text;
@@ -193,7 +223,7 @@
       let moved = false;
       return {
         move(x, y) {
-          const to = cellAt(x, y);
+          const to = cellAt(x, y, true);
           if (!to || !dry(to) || same(to, S[pin]) || same(to, pin === "start" ? S.end : S.start)) return;
           S[pin] = to;
           moved = true;
@@ -205,7 +235,7 @@
         },
       };
     }
-    if (S.tool === "start" || S.tool === "end" || e.shiftKey) return null;
+    if (!PAINT.includes(S.tool) || S.view === "3d" || e.shiftKey) return null;
     const stroke = { done: new Set() };
     apply(cell, stroke);
     let lx = X, ly = Y;
@@ -238,7 +268,7 @@
     }
     let fade = 1;
     if (S.fadeStart) {
-      fade = clamp01((now - S.fadeStart) / FADE_MS);
+      fade = clamp01((now - S.fadeStart) / S.fadeMs);
       if (fade < 1) busy = true;
       else S.fadeStart = 0;
     }
@@ -250,10 +280,17 @@
       S.focus = f;
       renderTip();
     }
+    // While the camera moves, Grid 3D draws a lighter surface; one more frame
+    // after it settles brings back the full detail.
+    const ck = [view.cam.th, view.cam.tilt, view.cam.k, view.cam.cx, view.cam.cy].join();
+    if (ck !== camKey) (camKey = ck), (camMoved = now);
+    const moving = view.cam.tilt > 1e-3 && now - camMoved < 150;
+    if (moving) busy = true;
     const after = S.t - tm.searchEnd;
     Board.draw(view, {
+      moving,
       terrain, grid: S.grid, R, labels, start: S.start, end: S.end,
-      k: stepAt(S.t), routeFrac: clamp01(after / DRAW_MS), walkFrac: clamp01((after - DRAW_MS) / WALK_MS),
+      k: stepAt(S.t), kf: Math.min(tm.N, S.t / tm.stepMs), rise: !reduce, routeFrac: clamp01(after / DRAW_MS), walkFrac: clamp01((after - DRAW_MS) / WALK_MS),
       style: S.style, fromStyle: S.fromStyle, fade,
       layers: S.layers, hover: S.hover, focus: S.focus,
       controls: MapLabels.controlBoxes(view.canvas, document.querySelectorAll("#mapbox .chip, #mapbox .overlay-zoom .btn")),
@@ -262,15 +299,53 @@
     return busy;
   }
 
-  // The map style follows the theme: Terrain in light, Night in dark.
-  function setStyle(name, fade) {
+  // The map style follows the theme (Terrain in light, Night in dark) until you pick one.
+  const styleFor = (theme) => (S.styleChoice === "auto" ? (theme === "dark" ? "night" : "terrain") : S.styleChoice);
+  function setStyle(name, fadeMs) {
     const ov = T.STYLES[name].overlay, box = $("mapbox");
     for (const k in ov) box.style.setProperty("--ov-" + k, ov[k]); // layer swatches match the map
     box.classList.toggle("dark-map", T.STYLES[name].dark);
+    renderStylePicker();
     if (name === S.style) return;
     S.fromStyle = S.style;
     S.style = name;
-    S.fadeStart = fade ? performance.now() : 0;
+    S.fadeMs = fadeMs;
+    S.fadeStart = fadeMs && !reduce ? performance.now() : 0;
+    view.kick();
+  }
+
+  // ---------- map style picker: a button that opens a short list ----------
+  const STYLE_ROWS = [["auto", "Match theme", "Terrain in light, Night in dark."]].concat(
+    ["terrain", "topo", "clay", "night"].map((k) => [k, T.STYLES[k].label, T.STYLES[k].description]),
+  );
+  function swatches(key) {
+    const keys = key === "auto" ? ["terrain", "night"] : [key];
+    return keys.map((k) => [T.colourFor(k, 0, 0.7, false), T.colourFor(k, 6, 0.7, false), T.colourFor(k, 0, 0.7, true)]
+      .map((c) => `<i style="background:${T.css(c)}"></i>`).join("")).join("");
+  }
+  function renderStylePicker() {
+    const row = STYLE_ROWS.find((r) => r[0] === S.styleChoice);
+    $("styleName").textContent = `Map style: ${row[1]}`;
+    $("styleSw").innerHTML = swatches(S.styleChoice);
+    $("styleMenu").innerHTML = STYLE_ROWS.map(([k, name, text]) =>
+      `<button type="button" data-style="${k}" aria-pressed="${k === S.styleChoice}"><span class="sws">${swatches(k)}</span><b>${name}</b><span class="dim">${text}</span></button>`).join("");
+  }
+  function openStyles(open) {
+    $("styleMenu").hidden = !open;
+    $("styleBtn").setAttribute("aria-expanded", String(open));
+  }
+
+  // ---------- 2D and 3D: the same run and camera, tilted ----------
+  function setView(v, instant) {
+    S.view = v;
+    if (v === "3d" && PAINT.includes(S.tool)) S.tool = "start";
+    document.querySelectorAll("[data-view]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === v)));
+    view.spin = 0;
+    view.mode3d = v === "3d";
+    fitBoard(instant);
+    labels = mapLabels();
+    writeHash();
+    renderTools();
     view.kick();
   }
 
@@ -335,9 +410,12 @@
   }
 
   function renderTools() {
-    document.querySelectorAll("[data-tool]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tool === S.tool)));
+    document.querySelectorAll("[data-tool]").forEach((b) => {
+      b.setAttribute("aria-pressed", String(b.dataset.tool === S.tool));
+      b.hidden = S.view === "3d" && PAINT.includes(b.dataset.tool);
+    });
     document.querySelectorAll("[data-layer]").forEach((b) => b.setAttribute("aria-pressed", String(S.layers[b.dataset.layer])));
-    $("hint").textContent = S.note || HINTS[S.tool];
+    $("hint").textContent = S.note || HINTS[S.tool] + (S.view === "3d" ? " Drag to turn the map, Shift and drag to slide it." : "");
     $("resetMap").hidden = !edited();
   }
 
@@ -368,9 +446,12 @@
   }
 
   // ---------- controls ----------
+  // Frame the whole board below the layer chips; in 3D leave room for the hills.
   function fitBoard(instant) {
-    const pts = [0, 0, cols(), rows()];
-    const k = view.framing(pts, 0, 0).k;
+    const pts = [0, 0, cols(), rows()], d3 = view.mode3d;
+    Object.assign(view.fitOpts, d3 ? { fill: [0.84, 0.64], nudge: 34 } : { fill: [0.92, 0.84], nudge: 24 });
+    const pose = d3 ? POSE_3D : { th: 0, tilt: 0 };
+    const k = view.framing(pts, pose.th, pose.tilt).k;
     view.kRange = [k * 0.6, k * 8];
     view.fit(pts, instant);
   }
@@ -436,6 +517,26 @@
       S.playing = false;
       seekStep(Number(e.target.value));
     });
+    document.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view, false)));
+    $("styleBtn").addEventListener("click", () => openStyles($("styleMenu").hidden));
+    $("styleMenu").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-style]");
+      if (!b) return;
+      S.styleChoice = b.dataset.style;
+      setStyle(styleFor(PathfinderTheme.current()), STYLE_FADE_MS);
+      writeHash();
+      openStyles(false);
+      $("styleBtn").focus();
+    });
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".style-pick")) openStyles(false);
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !$("styleMenu").hidden) {
+        openStyles(false);
+        $("styleBtn").focus();
+      }
+    });
     $("zin").addEventListener("click", () => view.zoomAt(view.W / 2, view.H / 2, 1.3));
     $("zout").addEventListener("click", () => view.zoomAt(view.W / 2, view.H / 2, 1 / 1.3));
     $("fit").addEventListener("click", () => fitBoard(false));
@@ -463,11 +564,19 @@
     cv.addEventListener("focus", () => view.kick());
     cv.addEventListener("blur", () => view.kick());
     addEventListener("resize", () => view.resize());
+    // A pasted link: rerun only if the board or the pins changed, so switching
+    // view or style keeps the run and the timeline.
     addEventListener("hashchange", () => {
       if (location.hash === lastHash) return;
+      const runKey = () => [S.map, S.start, S.end, encodeGrid()].join("|");
+      const before = runKey(), viewBefore = S.view;
       readHash();
-      refresh("end");
-      fitBoard(false);
+      if (runKey() !== before) {
+        refresh("end");
+        fitBoard(false);
+      }
+      if (S.view !== viewBefore) setView(S.view, false);
+      setStyle(styleFor(PathfinderTheme.current()), STYLE_FADE_MS);
     });
   }
 
@@ -475,11 +584,12 @@
   bind();
   readHash();
   view = new MapView($("cv"), {
-    mode3d: false,
+    mode3d: S.view === "3d",
+    pose3d: POSE_3D,
     height: (w) => Math.round(Math.max(340, Math.min(w * 0.8, innerHeight - 230))),
     draw: frame,
     pick: (X, Y) => {
-      const cell = cellAt(X, Y);
+      const cell = cellAt(X, Y, S.view === "3d");
       if (cell) apply(cell, { done: new Set() });
     },
     grab,
@@ -487,8 +597,9 @@
     // leave room for the layer chips across the top
     fit: { fill: [0.92, 0.84], minSpan: 1, kRange: [2, 400], nudge: 24 },
   });
-  setStyle(PathfinderTheme.current() === "dark" ? "night" : "terrain", false);
-  PathfinderTheme.onChange((theme, fade) => setStyle(theme === "dark" ? "night" : "terrain", fade));
+  setStyle(styleFor(PathfinderTheme.current()), 0);
+  PathfinderTheme.onChange((theme, fade) => setStyle(styleFor(theme), fade ? THEME_FADE_MS : 0));
+  document.querySelectorAll("[data-view]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === S.view)));
   fitBoard(true);
   // open on the finished run, so the first view already makes the point
   refresh("end");
