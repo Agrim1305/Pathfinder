@@ -141,7 +141,20 @@
   flex-direction: column;
   gap: 16px;
 }
-.side h1 {
+.intro h1 {
+  margin: 0 0 4px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.intro p {
+  margin: 0;
+  max-width: 70ch;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+.side .headline {
   margin: 0;
   font-size: 22px;
   font-weight: 700;
@@ -171,6 +184,29 @@
 }
 .row + .row {
   border-top: 1px solid var(--line);
+}
+.walk {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.row .sub {
+  grid-column: 1 / -1;
+  font-size: 12.5px;
+}
+.assume {
+  margin: 4px 0 10px !important;
+}
+.points {
+  margin: 0;
+  padding-left: 1.3em;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+.points b {
+  color: var(--ink);
 }
 .nm {
   display: flex;

@@ -8,7 +8,9 @@
  */
 (function (root) {
   "use strict";
-  const PF = typeof module !== "undefined" && module.exports ? require("./pathfinder.js") : root.Pathfinder;
+  const node = typeof module !== "undefined" && module.exports;
+  const PF = node ? require("./pathfinder.js") : root.Pathfinder;
+  const Timing = node ? require("./shared/timing.js") : root.Timing;
   const ALGOS = ["bfs", "ucs", "astar"];
   const NAMES = { bfs: "BFS", ucs: "Dijkstra", astar: "A*" };
 
@@ -43,6 +45,8 @@
       nodes: res.order.length, // every node taken off the queue, stale ones included
       cells, // distinct cells taken off the queue
       peak,
+      // how long the search takes on its own, without the trace: median of 5 runs
+      ms: Timing.medianMs(() => PF.search(algo, rows, cols, start, end, grid, "manhattan")),
     };
   }
 

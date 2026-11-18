@@ -44,3 +44,5 @@ jobs:
         run: node tests/test_labels.js
       - name: Check random maps (same seed, same map; pins connected)
         run: node tests/test_generate.js
+      - name: Check the figures quoted on the site match a fresh measurement
+        run: node tests/test_claims.js

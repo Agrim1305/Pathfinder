@@ -521,7 +521,7 @@
           <span class="nm"><i class="k ${a}"></i>${x.name}${badges.map((b) => `<span class="badge">${b}</span>`).join("")}</span>
           <span class="mono">${x.path ? x.cost : "none"}</span><span class="mono">${x.path ? x.steps : "none"}</span>
           <span class="bar"><i class="${a}" style="width:${(100 * x.nodes) / R.longest}%"></i></span>
-          <span class="nodes"><b class="mono">${fmt(x.nodes)}</b> nodes taken off the queue (includes stale)</span>
+          <span class="nodes"><b class="mono">${fmt(x.nodes)}</b> nodes taken off the queue (includes stale), found in ${Timing.formatMs(x.ms)}</span>
         </div>`;
       }).join("");
     const fewer = R.ucs.nodes - R.astar.nodes;

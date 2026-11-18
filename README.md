@@ -8,7 +8,19 @@ implemented from scratch in Python with no external dependencies.
 
 **[Try it in your browser](https://agrim1305.github.io/Pathfinder/)**: the site opens on the real walking network of Adelaide's city centre, and its **[grid demo](https://agrim1305.github.io/Pathfinder/grid/)** shows how the searches work, step by step. The four views are below. The grid demo opens on `maps/detour.txt`, the map behind the figures further down, and `python benchmark.py` reproduces them. The browser version is a JavaScript copy of the same algorithms, and CI checks it gives identical results to the Python code on every map.
 
-**The short version:** counting steps is not enough. On the demo map, BFS (which only
+## What this shows
+
+1. **“Shortest” depends on what you count.** BFS counts turns, so it often walks further.
+   Dijkstra and A\* count metres.
+2. **A\* does the same job with less work.** It aims at the flag, so it skips streets heading
+   the wrong way. Across 300 random walks it checked a median of 77% fewer junctions than
+   Dijkstra for exactly the same route.
+3. **The answers are checked.** Every route matches NetworkX, an independent graph library,
+   on all 300 test walks.
+
+Walking times assume about 5 km/h with no waits at crossings.
+
+**On the grid:** counting steps is not enough. On the demo map, BFS (which only
 counts steps) walks straight over a hill and pays **35% more effort** than the best route of
 the same length, and A\* finds that best route while expanding **59% fewer nodes** than Dijkstra.
 
@@ -160,8 +172,9 @@ and Node checks for the browser code: `compare_js.js` (the demo matches the Pyth
 `test_trace.js` (recording a trace never changes a search), `test_layers.js` (the numbers on
 the page, such as the cells A\* skipped), `test_terrain.js`, `test_view.js` (the shared map
 camera), `test_labels.js` (map labels never overlap each other, a pin or a control),
-`test_generate.js` (a seed always gives the same random map, with the pins connected) and
-`test_contrast.js` (every text and control colour meets WCAG AA in both themes).
+`test_generate.js` (a seed always gives the same random map, with the pins connected),
+`test_claims.js` (the figures quoted on the site, such as "77% fewer junctions", match a fresh
+measurement) and `test_contrast.js` (every text and control colour meets WCAG AA in both themes).
 GitHub Actions runs them all on every push. The Adelaide tests need Node and NetworkX
 (`pip install -r tools/requirements.txt`) and skip themselves without them; CI installs both
 and fails if they skip. The grid tests check that:

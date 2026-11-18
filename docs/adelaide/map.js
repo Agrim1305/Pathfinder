@@ -6,6 +6,11 @@
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
+  // Walking time from distance, at about 5 km/h (1.4 m/s) with no waits at crossings.
+  const WALK_M_PER_S = 1.4;
+  const walkMinutes = (m) => Math.round(m / WALK_M_PER_S / 60);
+  // numbers keep their units on the same line (no-break spaces)
+  const walkTime = (m) => (m / WALK_M_PER_S < 60 ? 'under 1\u00a0min' : walkMinutes(m) + '\u00a0min');
   // the data sits beside this script, wherever the page that loads it lives
   const DATA = new URL('data/adelaide_cbd.json', document.currentScript.src).href;
 
@@ -46,7 +51,7 @@
         this.view.kick();
       });
       this.reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-      this.res = AdelaideGraph.solve(D, D.sp, D.ep);
+      this.res = this.solve(D.sp, D.ep);
       this.bindControls();
       this.view = new MapView($('cv'), {
         cam: { th: -0.38, tilt: 0.92, k: 0.5, cx: 0, cy: 0 },
@@ -61,7 +66,13 @@
       this.ui();
     }
     setState(patch, cb) { Object.assign(this.state, patch); this.ui(); if (cb) cb(); }
-    solve(s, t) { return AdelaideGraph.solve(this.D, s, t); }
+    // The three searches, plus how long each takes: the median of 5 timed runs,
+    // measured here from outside graph.js.
+    solve(s, t) {
+      const res = AdelaideGraph.solve(this.D, s, t), time = (alg) => Timing.medianMs(() => AdelaideGraph.search(this.D, alg, s, t));
+      res.ms = { B: time('bfs'), U: time('ucs'), A: time('astar') };
+      return res;
+    }
     movePin(v) {
       const s = this.state, start = s.place === 'start', other = start ? s.end : s.start;
       if (v === other) { this.setState({ note: start ? 'The flag is already there.' : 'The start is already there.' }); return; }
@@ -92,17 +103,21 @@
       $('pStart').setAttribute('aria-pressed', String(ps)); $('pEnd').setAttribute('aria-pressed', String(!ps));
       const nm = (n) => D.nodeName[n] || 'a footpath';
       $('hint').textContent = s.note || ('Start on ' + nm(s.start) + '. Flag on ' + nm(s.end) + '. Click the map to move the ' + (ps ? 'start.' : 'flag.'));
-      const dist = (r) => (r.path ? Math.round(r.dist).toLocaleString('en-AU') + ' m' : 'no route');
-      const ex = (r) => r.order.length.toLocaleString('en-AU') + ' junctions';
-      $('bfsDist').textContent = dist(R.B); $('ucsDist').textContent = dist(R.U); $('astarDist').textContent = dist(R.A);
-      $('bfsN').textContent = ex(R.B); $('ucsN').textContent = ex(R.U); $('astarN').textContent = ex(R.A);
-      const longer = Math.round(R.B.dist - R.A.dist);
+      const n = (x) => Math.round(x).toLocaleString('en-AU');
+      const dist = (r) => (r.path ? n(r.dist) + '\u00a0m' : 'no route');
+      const ex = (r, ms) => n(r.order.length) + ' junctions, found in ' + Timing.formatMs(ms);
+      for (const [id, r, ms] of [['bfs', R.B, R.ms.B], ['ucs', R.U, R.ms.U], ['astar', R.A, R.ms.A]]) {
+        $(id + 'Dist').textContent = dist(r);
+        $(id + 'Walk').textContent = r.path ? walkTime(r.dist) : '';
+        $(id + 'N').textContent = ex(r, ms);
+      }
+      const longer = Math.round(R.B.dist - R.A.dist), slower = walkMinutes(R.B.dist) - walkMinutes(R.A.dist);
       if (longer > 5) {
-        $('headline').textContent = 'BFS counts segments, not metres. It walks ' + longer + ' m further.';
-        $('summary').textContent = 'BFS finds the route with the fewest street segments (' + R.B.pe.length + '). Dijkstra and A* find the shortest walk, ' + Math.round(R.A.dist) + ' m. A* gets there after expanding ' + R.A.order.length + ' junctions; Dijkstra expands ' + R.U.order.length + '.';
+        $('headline').textContent = 'BFS counts segments, not metres. It walks ' + n(longer) + '\u00a0m further' + (slower > 0 ? ', ' + slower + '\u00a0min more.' : '.');
+        $('summary').textContent = 'BFS finds the route with the fewest street segments (' + R.B.pe.length + '): ' + dist(R.B) + ', ' + walkTime(R.B.dist) + ' on foot. Dijkstra and A* find the shortest walk: ' + dist(R.A) + ', ' + walkTime(R.A.dist) + ' on foot. A* gets there after expanding ' + n(R.A.order.length) + ' junctions; Dijkstra expands ' + n(R.U.order.length) + '.';
       } else {
         $('headline').textContent = 'Same walk for all three. A* searched far less.';
-        $('summary').textContent = 'Every algorithm finds a ' + Math.round(R.A.dist) + ' m walk here. A* expanded ' + R.A.order.length + ' junctions, Dijkstra ' + R.U.order.length + ' and BFS ' + R.B.order.length + '.';
+        $('summary').textContent = 'Every algorithm finds the same ' + dist(R.A) + ' walk here, ' + walkTime(R.A.dist) + ' on foot. A* expanded ' + n(R.A.order.length) + ' junctions, Dijkstra ' + n(R.U.order.length) + ' and BFS ' + n(R.B.order.length) + '.';
       }
       const est = D.bld.filter((b) => b.est).length;
       $('about').textContent = 'Real OpenStreetMap data for the city centre: ' + D.bld.length.toLocaleString('en-AU') + ' buildings and a walking network of ' + D.N.toLocaleString('en-AU') + ' junctions and ' + D.edges.length.toLocaleString('en-AU') + ' street and path segments. Heights come from each building\'s mapped height or floor count. ' + est.toLocaleString('en-AU') + ' buildings have neither, so they use a typical height and their roofs are drawn a shade darker.';

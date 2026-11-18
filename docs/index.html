@@ -14,7 +14,7 @@
         if (/[#&](view|map|mode|seed)=/.test(location.hash)) location.replace("grid/" + location.hash);
       })();
     </script>
-    <script src="shared/theme.js?v=25"></script>
+    <script src="shared/theme.js?v=27"></script>
     <link rel="preload" href="adelaide/data/adelaide_cbd.json" as="fetch" crossorigin />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -22,8 +22,8 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap"
     />
-    <link rel="stylesheet" href="shared/theme.css?v=25" />
-    <link rel="stylesheet" href="adelaide/styles.css?v=25" />
+    <link rel="stylesheet" href="shared/theme.css?v=27" />
+    <link rel="stylesheet" href="adelaide/styles.css?v=27" />
   </head>
   <body>
     <header class="top">
@@ -48,6 +48,10 @@
 
     <div class="body">
       <main class="stage" aria-label="Adelaide city centre map">
+        <section class="intro">
+          <h1>How does a map find your route?</h1>
+          <p>Every map app answers “how do I get there?” in a fraction of a second. Pick two places in Adelaide and watch three classic algorithms search the real streets: which route each finds, how long it takes to walk, and how much work it took to find.</p>
+        </section>
         <div class="map" id="map">
           <canvas
             id="cv"
@@ -91,22 +95,31 @@
 
       <aside class="side" aria-label="Results">
         <section class="card">
-          <h1 id="headline">Finding routes&hellip;</h1>
+          <h2 class="headline" id="headline">Finding routes&hellip;</h2>
           <p id="summary"></p>
         </section>
         <section class="card rows">
-          <div class="row"><span class="nm"><i class="k b"></i>BFS</span><span class="mono" id="bfsDist"></span><span class="mono dim" id="bfsN"></span></div>
-          <div class="row"><span class="nm"><i class="k d"></i>Dijkstra</span><span class="mono" id="ucsDist"></span><span class="mono dim" id="ucsN"></span></div>
-          <div class="row"><span class="nm"><i class="k s"></i>A*</span><span class="mono" id="astarDist"></span><span class="mono dim" id="astarN"></span></div>
+          <div class="row"><span class="nm"><i class="k b"></i>BFS</span><span class="mono" id="bfsDist"></span><span class="walk" id="bfsWalk"></span><span class="sub mono dim" id="bfsN"></span></div>
+          <div class="row"><span class="nm"><i class="k d"></i>Dijkstra</span><span class="mono" id="ucsDist"></span><span class="walk" id="ucsWalk"></span><span class="sub mono dim" id="ucsN"></span></div>
+          <div class="row"><span class="nm"><i class="k s"></i>A*</span><span class="mono" id="astarDist"></span><span class="walk" id="astarWalk"></span><span class="sub mono dim" id="astarN"></span></div>
+          <p class="tiny assume">Walking times assume about 5 km/h with no waits at crossings.</p>
+        </section>
+        <section class="card shows">
+          <h2>What this shows</h2>
+          <ol class="points">
+            <li><b>“Shortest” depends on what you count.</b> BFS counts turns, so it often walks further. Dijkstra and A* count metres.</li>
+            <li><b>A* does the same job with less work.</b> It aims at the flag, so it skips streets heading the wrong way. Across 300 random walks it checked a median of 77% fewer junctions than Dijkstra for exactly the same route.</li>
+            <li><b>The answers are checked.</b> Every route matches NetworkX, an independent graph library, on all 300 test walks.</li>
+          </ol>
+        </section>
+        <section class="card">
+          <h2>How each one counts</h2>
+          <p class="small">BFS counts street segments, so it takes the route with the fewest of them. Dijkstra and A* count metres. A* also aims at the flag using the straight-line distance to it, which can never be longer than the real walk, so its route is still the shortest.</p>
         </section>
         <section class="card grid-link">
           <h2>Why does A* search less?</h2>
           <p class="small">The same three searches on a small hilly grid, where you can see every cell they look at and the queue behind each step.</p>
           <a class="btn primary" href="grid/#view=2d">See it step by step</a>
-        </section>
-        <section class="card">
-          <h2>How each one counts</h2>
-          <p class="small">BFS counts street segments, so it takes the route with the fewest of them. Dijkstra and A* count metres. A* also aims at the flag using the straight-line distance to it, which can never be longer than the real walk, so its route is still the shortest.</p>
         </section>
         <section class="card">
           <h2>About the map</h2>
@@ -115,11 +128,12 @@
         </section>
       </aside>
     </div>
-    <script src="adelaide/graph.js?v=25"></script>
-    <script src="adelaide/palette.js?v=25"></script>
-    <script src="shared/view.js?v=25"></script>
-    <script src="shared/labels.js?v=25"></script>
-    <script src="shared/scroll.js?v=25"></script>
-    <script src="adelaide/map.js?v=25"></script>
+    <script src="adelaide/graph.js?v=27"></script>
+    <script src="adelaide/palette.js?v=27"></script>
+    <script src="shared/timing.js?v=27"></script>
+    <script src="shared/view.js?v=27"></script>
+    <script src="shared/labels.js?v=27"></script>
+    <script src="shared/scroll.js?v=27"></script>
+    <script src="adelaide/map.js?v=27"></script>
   </body>
 </html>
